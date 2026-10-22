@@ -1,0 +1,41 @@
+# Tajomstvá – nikdy do gitu
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Logy a dočasné súbory
+*.log
+tmp/
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Veľké dátové súbory (archív zdrojov je mimo gitu)
+data/raw/
+*.pdf
