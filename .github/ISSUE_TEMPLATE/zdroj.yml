@@ -1,0 +1,30 @@
+name: Nový zdroj dát
+description: Publikovaný dokument, ktorý treba pridať (zákon, uznesenie, rozpočet, zmluva)
+body:
+  - type: markdown
+    attributes:
+      value: Verdikt stojí len na publikovanom dokumente. Mediálny článok je len tip, uveď k nemu oficiálny dokument.
+  - type: input
+    id: url
+    attributes:
+      label: URL dokumentu
+    validations:
+      required: true
+  - type: dropdown
+    id: typ
+    attributes:
+      label: Typ dokumentu
+      options:
+        - Zákon
+        - Uznesenie
+        - Rozpočet
+        - Zmluva
+        - Programové vyhlásenie / volebný program
+        - Iné
+    validations:
+      required: true
+  - type: textarea
+    id: poznamka
+    attributes:
+      label: Poznámka
+      description: Ku ktorému sľubu sa dokument viaže. Bez hodnotenia a politických komentárov.

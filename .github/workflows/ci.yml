@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Kroky sa spustia, až keď pribudne kód. Po výbere stacku ich treba upraviť.
+      - name: Backend tests
+        if: hashFiles('backend/pyproject.toml') != ''
+        working-directory: backend
+        run: |
+          pip install -e ".[dev]"
+          pytest
+
+      - name: Frontend lint and tests
+        if: hashFiles('frontend/package.json') != ''
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test --if-present
