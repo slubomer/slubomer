@@ -1,0 +1,29 @@
+name: Úloha
+description: Nová funkcia, zmena alebo práca na projekte
+body:
+  - type: textarea
+    id: popis
+    attributes:
+      label: Čo treba urobiť
+      description: Stručne a vecne, čo sa má zmeniť a prečo.
+    validations:
+      required: true
+  - type: dropdown
+    id: oblast
+    attributes:
+      label: Oblasť
+      options:
+        - AI
+        - Backend
+        - Frontend
+        - Dáta a testovanie
+        - UX a dokumentácia
+    validations:
+      required: true
+  - type: textarea
+    id: hotovo
+    attributes:
+      label: Kedy je hotovo
+      description: Podmienky, podľa ktorých sa dá úloha zavrieť.
+      placeholder: |
+        - [ ] ...

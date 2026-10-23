@@ -1,0 +1,25 @@
+name: Chyba
+description: Niečo nefunguje, ako má
+labels: ["bug"]
+body:
+  - type: textarea
+    id: popis
+    attributes:
+      label: Čo sa stalo
+    validations:
+      required: true
+  - type: textarea
+    id: kroky
+    attributes:
+      label: Ako to zopakovať
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: ocakavane
+    attributes:
+      label: Čo malo nastať
+    validations:
+      required: true
