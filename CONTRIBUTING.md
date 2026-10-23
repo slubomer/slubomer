@@ -20,6 +20,7 @@ Formát: `typ/<číslo-issue>-kratky-popis`
 | `docs/` | dokumentácia | `docs/8-readme` |
 | `data/` | zdroje, import, testovacie sady | `data/15-import-pvv` |
 | `ai/` | prompty, schémy, vyhodnotenie | `ai/20-prompt-extrakcia-v2` |
+| `chore/` | nastavenie repozitára, CI, závislosti | `chore/5-ci` |
 
 Vetvy sú krátkodobé – merge do pár dní, potom sa zmažú.
 
