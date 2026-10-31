@@ -11,12 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Kroky sa spustia, až keď pribudne kód. Po výbere stacku ich treba upraviť.
-      - name: Backend tests
+      # Kroky sa spustia, len ak daná časť projektu existuje.
+      - name: Set up Python
+        if: hashFiles('backend/pyproject.toml') != ''
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Backend lint and tests
         if: hashFiles('backend/pyproject.toml') != ''
         working-directory: backend
         run: |
           pip install -e ".[dev]"
+          ruff check .
+          ruff format --check .
           pytest
 
       - name: Frontend lint and tests
