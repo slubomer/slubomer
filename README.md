@@ -29,4 +29,4 @@ Pred prvou zmenou si prečítaj [CONTRIBUTING.md](CONTRIBUTING.md). Každá zmen
 
 ## Licencia
 
-Kód je pod licenciou [GPL v3](LICENSE), dáta v `data/` pod [CC BY 4.0](data/LICENSE).
+Kód je pod licenciou [AGPL-3.0](LICENSE), dáta v `data/` pod [CC BY 4.0](data/LICENSE).
