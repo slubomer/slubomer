@@ -6,14 +6,14 @@ Každý verdikt stojí len na publikovanom dokumente: zákone, uznesení, rozpo�
 
 ## Stav
 
-Projekt je na začiatku. Repozitár má zatiaľ pravidlá a kostru, kód pribudne.
+Projekt je na začiatku. Backend má kostru (FastAPI, PostgreSQL, migrácie), ostatné časti pribudnú.
 
 ## Štruktúra
 
 | Priečinok | Obsah |
 | --- | --- |
 | `ai/` | prompty (`ai/prompts/`), schémy a vyhodnotenie presnosti |
-| `backend/` | serverová časť |
+| `backend/` | serverová časť (Python, FastAPI) – [docs/backend.md](docs/backend.md) |
 | `frontend/` | webové rozhranie |
 | `data/` | zdroje, import a testovacie sady |
 | `tests/` | testy |
@@ -21,7 +21,14 @@ Projekt je na začiatku. Repozitár má zatiaľ pravidlá a kostru, kód pribudn
 
 ## Spustenie
 
-Doplní sa, keď pribudne kód. Lokálne nastavenia patria do `.env` (vzor je v `.env.example`).
+Potrebuješ Docker. Lokálne nastavenia patria do `.env` (vzor je v `.env.example`).
+
+```bash
+cp .env.example .env   # vyplň POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+docker compose up --build
+```
+
+Backend potom beží na http://localhost:8000 (API dokumentácia na `/docs`). Podrobnosti a spustenie bez Dockeru sú v [docs/backend.md](docs/backend.md).
 
 ## Prispievanie
 
