@@ -120,6 +120,28 @@ Príkaz sa opýta na heslo a vypíše kľúč 2FA, ktorý si pridáš do apliká
 
 Swagger beží na rovnakej adrese ako API, takže cookie z `POST /api/v1/auth/login` prehliadač automaticky pošle aj pri ďalších volaniach. Stačí sa prihlásiť cez „Try it out“ a potom volať chránené endpointy.
 
+## Audit a verzie verdiktov
+
+Ku každej zmene dát musí byť dohľadateľné, kto ju urobil, kedy a prečo. Publikovaný verdikt sa nikdy neprepisuje.
+
+### Audit log
+
+- Tabuľka `audit_log`: autor (`actor_id`, prázdny pri systémových akciách ako import), akcia, entita a jej id, stará a nová hodnota (`before`, `after`) a dôvod (`reason`).
+- Každá služba, ktorá mení dáta, volá `audit.record(...)` (`app/services/audit.py`) **pred** svojím `commit`. Zmena a jej záznam sa tak uložia spolu alebo vôbec.
+- Ukladajú sa len zmenené polia. Tajné polia (`password_hash`, `totp_secret`) sa do auditu nikdy nedostanú, pri hesle sa zapíše len `password_reset` alebo `password_changed`.
+- Import sľubov zapíše jeden súhrnný záznam (počet nových a preskočených), nie jeden za každý sľub.
+- V PostgreSQL databázový trigger odmietne `UPDATE` aj `DELETE` v `audit_log` (migrácia 0005). Funguje aj pre vlastníka databázy.
+- Používatelia sa nemažú, len deaktivujú. Používateľa, ktorý je v audite, databáza zmazať nedovolí.
+- `GET /api/v1/admin/audit?entity=&entity_id=&actor_id=` vráti záznamy od najnovšieho. Smie ho čítať celá redakcia (redaktor, overovateľ, admin).
+
+Zatiaľ sa zapisujú zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA) a import. Zmeny sľubov, dôkazov, verdiktov a námietok pribudnú s B-06, B-11 a B-12.
+
+### Verzie verdiktov
+
+- Verdikt v stave `publikovany` alebo `nahradeny` sa nedá zmeniť ani zmazať. Jediná povolená zmena je `publikovany` → `nahradeny`, keď ho nahradí nová verzia.
+- Nový obsah znamená nový riadok `verdict` s vyšším číslom verzie. Návrhy (`navrh`, `vrateny`) sa upravovať dajú.
+- Stráži to SQLAlchemy udalosť v `app/models/verdict.py`, ktorá pri pokuse vyhodí `VerdictLocked`. Platí to pre akýkoľvek kód, nielen pre API.
+
 ## Dáta
 
 ### Sľuby z volebných programov
