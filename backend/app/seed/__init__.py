@@ -8,7 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.text import normalize
+from app.core.text import normalize, slugify
 from app.models import Category, Document, Evidence, GlossaryTerm, Promise, Subject, Verdict
 from app.models.enums import (
     DocumentKind,
@@ -22,10 +22,6 @@ from app.seed import data
 
 # Newest verdict is published on this day, each next promise one day earlier.
 _LATEST_PUBLISHED = datetime(2026, 11, 10, 12, 0, tzinfo=UTC)
-
-
-def slugify(text: str) -> str:
-    return "-".join(normalize(text).split())
 
 
 def _get_or_create[T](db: Session, model: type[T], lookup: dict, values: dict) -> T:
@@ -79,6 +75,7 @@ def seed(db: Session) -> None:
         promise = Promise(
             slug=p["slug"],
             title=p["title"],
+            description=p["quote"],
             quote=p["quote"],
             page=page,
             type=PromiseType(p["type"]),
@@ -131,7 +128,11 @@ def seed(db: Session) -> None:
                 )
             )
 
+    seed_glossary(db)
+
+
+def seed_glossary(db: Session) -> None:
+    """Glossary terms only. Real content (not made up), so it is loaded in Docker too."""
     for t in data.GLOSSARY:
         _get_or_create(db, GlossaryTerm, {"slug": slugify(t["name"])}, t)
-
     db.commit()

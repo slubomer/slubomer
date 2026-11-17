@@ -38,14 +38,15 @@ class EvidenceOut(ApiModel):
 class PromiseListItem(ApiModel):
     slug: str
     title: str
-    type: PromiseType
+    type: PromiseType | None  # None = not classified yet
     subject: SubjectOut
-    category: CategoryOut
-    verdict: VerdictShort | None
+    category: CategoryOut | None  # None = not classified yet
+    verdict: VerdictShort | None  # None = not rated yet
 
 
 class PromiseDetail(PromiseListItem):
-    quote: str
+    description: str
+    quote: str | None  # verbatim from the programme, once it is extracted
     page: int | None
     ai_generated: bool
     document: DocumentOut | None

@@ -34,7 +34,7 @@ def _public_select() -> Select:
     return (
         select(Promise, Verdict)
         .join(Promise.subject)
-        .join(Promise.category)
+        .outerjoin(Promise.category)  # promises without a category stay in the list
         .outerjoin(
             Verdict,
             and_(Verdict.promise_id == Promise.id, Verdict.state == VerdictState.PUBLIKOVANY),
@@ -124,6 +124,7 @@ def get_detail(db: Session, slug: str) -> PromiseDetail | None:
     item = _list_item(promise, current)
     return PromiseDetail(
         **item.model_dump(),
+        description=promise.description,
         quote=promise.quote,
         page=promise.page,
         ai_generated=promise.ai_generated,

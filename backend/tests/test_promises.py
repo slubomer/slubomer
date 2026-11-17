@@ -51,6 +51,7 @@ def test_detail_has_quote_evidence_and_history(client):
     body = client.get("/api/v1/promises/obchvat").json()
 
     assert body["quote"].startswith("Do konca volebného obdobia")
+    assert body["description"] == body["quote"]
     assert body["verdict"]["value"] == "nesplneny"
     assert {e["role"] for e in body["evidence"]} == {"zdroj", "podklad"}
     # Newest version first; the older one is kept for history.
