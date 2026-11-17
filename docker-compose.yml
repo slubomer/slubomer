@@ -31,7 +31,9 @@ services:
     # Mount the code and reload on change, so you don't rebuild after every edit.
     volumes:
       - ./backend:/app
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - ./data:/data:ro
+    # Local dev also imports the promises from data/sluby.json and the glossary (safe to repeat).
+    command: sh -c "alembic upgrade head && python -m app.import_promises /data/sluby.json && python -m app.seed glossary && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   db-data:
