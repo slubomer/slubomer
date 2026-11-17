@@ -46,7 +46,7 @@ Pravidlo: **routa → služba → model**. Routa spracuje HTTP, logika je v `ser
    - http://localhost:8000/health/db → backend sa pripojí k databáze
    - http://localhost:8000/docs → API dokumentácia
 
-Pri štarte sa automaticky spustia migrácie a nahrajú sa skúšobné dáta z prototypu. Kód je pripojený do kontajnera, zmeny sa prejavia bez nového buildu.
+Pri štarte sa automaticky spustia migrácie a naimportujú sa sľuby z `data/sluby.json`. Kód je pripojený do kontajnera, zmeny sa prejavia bez nového buildu.
 
 ## Spustenie bez Dockeru
 
@@ -69,17 +69,34 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 | Endpoint | Čo vráti |
 | --- | --- |
 | `GET /api/v1/promises` | schválené sľuby s publikovaným verdiktom; filtre `q`, `subject`, `category`, `verdict`, `type`, triedenie `sort` (`verified` / `title`), stránkovanie `page`, `page_size` |
-| `GET /api/v1/promises/{slug}` | detail: doslovná citácia so stranou, dôkazy, aktuálny verdikt a história verzií |
+| `GET /api/v1/promises/{slug}` | detail: opis sľubu, doslovná citácia so stranou (ak je známa), dôkazy, aktuálny verdikt a história verzií |
 | `GET /api/v1/subjects`, `GET /api/v1/categories` | zoznamy pre filtre s počtom sľubov |
-| `GET /api/v1/stats/overview` | počet sľubov a rozdelenie podľa verdiktu |
+| `GET /api/v1/stats/overview` | počet sľubov, rozdelenie podľa verdiktu a počet nehodnotených (`unrated`) |
 | `GET /api/v1/stats/subjects` | to isté pre každý subjekt |
 | `GET /api/v1/glossary`, `GET /api/v1/glossary/{slug}` | slovník pojmov v slovenskej abecede, s `stems` na zvýraznenie v texte |
 
 Hodnoty verdiktu sú `splneny`, `nesplneny` a `v_procese`. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
-## Skúšobné dáta
+## Dáta
 
-`python -m app.seed` nahrá dáta z prototypu vo Figme: 3 anonymné subjekty, 4 kategórie, 16 sľubov s verdiktami a dôkazmi a 21 pojmov. Dokumenty sú označené ako „ukážka“. Príkaz sa dá spustiť opakovane, existujúce záznamy nechá tak. Docker Compose ho spúšťa sám.
+### Sľuby z volebných programov
+
+`data/sluby.json` obsahuje sľuby strán. Každý záznam má polia `strana`, `nazov`, `telo`, `datum` a `stav`. Import:
+
+```bash
+python -m app.import_promises ../data/sluby.json
+```
+
+- Strana sa uloží ako `subject` (slug sa vytvorí z názvu), `nazov` ako `title` a `telo` ako `description`.
+- Sľuby sa importujú **bez verdiktu**. Pole `stav` je len zástupná hodnota: verdikt vzniká až po schválení politológom a musí mať dôkaz. Na webe sú také sľuby „zatiaľ nehodnotené“ a štatistiky ich vracajú v poli `unrated`.
+- Kategória, typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia alebo AI.
+- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore.
+
+Docker Compose spúšťa import pri štarte sám, spolu so slovníkom pojmov (`python -m app.seed glossary`).
+
+### Skúšobné dáta z prototypu
+
+`python -m app.seed` nahrá vymyslené dáta z prototypu vo Figme: 3 anonymné subjekty, 4 kategórie, 16 sľubov s verdiktami a dôkazmi a 21 pojmov slovníka. Dokumenty sú označené ako „ukážka“. Používajú sa v testoch a na lokálne skúšanie verdiktov a dôkazov, ktoré skutočné dáta zatiaľ nemajú. Príkaz sa dá spustiť opakovane. `python -m app.seed glossary` nahrá iba slovník (skutočné vysvetlenia pojmov), ten sa nahráva aj v Dockeri.
 
 ## Testy a kontrola štýlu
 
