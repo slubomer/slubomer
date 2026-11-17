@@ -129,12 +129,12 @@ Ku každej zmene dát musí byť dohľadateľné, kto ju urobil, kedy a prečo. 
 - Tabuľka `audit_log`: autor (`actor_id`, prázdny pri systémových akciách ako import), akcia, entita a jej id, stará a nová hodnota (`before`, `after`) a dôvod (`reason`).
 - Každá služba, ktorá mení dáta, volá `audit.record(...)` (`app/services/audit.py`) **pred** svojím `commit`. Zmena a jej záznam sa tak uložia spolu alebo vôbec.
 - Ukladajú sa len zmenené polia. Tajné polia (`password_hash`, `totp_secret`) sa do auditu nikdy nedostanú, pri hesle sa zapíše len `password_reset` alebo `password_changed`.
-- Import sľubov zapíše jeden súhrnný záznam (počet nových a preskočených), nie jeden za každý sľub.
+- Import sľubov zapíše jeden súhrnný záznam (počet nových, dodatočne zaradených do kategórie a preskočených), nie jeden za každý sľub.
 - V PostgreSQL databázový trigger odmietne `UPDATE` aj `DELETE` v `audit_log` (migrácia 0005). Funguje aj pre vlastníka databázy.
 - Používatelia sa nemažú, len deaktivujú. Používateľa, ktorý je v audite, databáza zmazať nedovolí.
 - `GET /api/v1/admin/audit?entity=&entity_id=&actor_id=` vráti záznamy od najnovšieho. Smie ho čítať celá redakcia (redaktor, overovateľ, admin).
 
-Zatiaľ sa zapisujú zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA) a import. Zmeny sľubov, dôkazov, verdiktov a námietok pribudnú s B-06, B-11 a B-12.
+Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA), import a všetky zmeny cez redakčné API (sľuby, dôkazy, dokumenty, kategórie, slovník). Zmeny verdiktov a námietok pribudnú s B-06 a B-12.
 
 ### Verzie verdiktov
 
@@ -142,11 +142,35 @@ Zatiaľ sa zapisujú zmeny používateľov (vytvorenie, úprava, reset a zmena h
 - Nový obsah znamená nový riadok `verdict` s vyšším číslom verzie. Návrhy (`navrh`, `vrateny`) sa upravovať dajú.
 - Stráži to SQLAlchemy udalosť v `app/models/verdict.py`, ktorá pri pokuse vyhodí `VerdictLocked`. Platí to pre akýkoľvek kód, nielen pre API.
 
+## Redakčné API
+
+Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len čítať, admin (s 2FA) môže všetko. Každá zmena ide do auditu.
+
+| Endpoint | Čo robí |
+| --- | --- |
+| `GET /api/v1/admin/promises` | Všetky sľuby vrátane návrhov a zamietnutých. Filtre `state`, `subject`, `category`, `without_category`, `q` |
+| `GET /api/v1/admin/promises/{id}` | Detail s dôkazmi a všetkými verziami verdiktu, aj návrhmi |
+| `POST /api/v1/admin/promises` | Nový sľub ručne. Začína ako `navrh`, verejne viditeľný je až po schválení |
+| `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
+| `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe |
+| `POST /api/v1/admin/promises/{id}/reject` | Zamietne sľub (napr. nie je to sľub, duplikát). Dôvod je povinný |
+| `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou |
+| `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite |
+| `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
+| `GET/POST /api/v1/admin/categories`, `PATCH .../{id}` | Správa kategórií. Slug sa pri premenovaní nemení |
+| `GET/POST /api/v1/admin/glossary`, `PATCH .../{id}` | Správa slovníka pojmov |
+
+Pravidlá:
+
+- Doslovná citácia (`quote`) a strana (`page`) sú dôkazom toho, čo bolo sľúbené. Prvýkrát sa vyplnia voľne, ich neskoršia zmena vyžaduje `reason`, inak API vráti 422.
+- Subjekt a kategória sa posielajú slugom (`"category": "doprava"`), dokument číslom `document_id`.
+- Pri zmene názvu, textu, kategórie alebo subjektu sa prepočíta text pre vyhľadávanie (`Promise.refresh_search_text()`).
+
 ## Dáta
 
 ### Sľuby z volebných programov
 
-`data/sluby.json` obsahuje sľuby strán. Každý záznam má polia `strana`, `nazov`, `telo`, `datum` a `stav`. Import:
+`data/sluby.json` obsahuje sľuby strán. Každý záznam má polia `strana`, `nazov`, `telo`, `datum`, `stav` a voliteľne `kategoria`. Import:
 
 ```bash
 python -m app.import_promises ../data/sluby.json
@@ -154,8 +178,9 @@ python -m app.import_promises ../data/sluby.json
 
 - Strana sa uloží ako `subject` (slug sa vytvorí z názvu), `nazov` ako `title` a `telo` ako `description`.
 - Sľuby sa importujú **bez verdiktu**. Pole `stav` je len zástupná hodnota: verdikt vzniká až po schválení politológom a musí mať dôkaz. Na webe sú také sľuby „zatiaľ nehodnotené“ a štatistiky ich vracajú v poli `unrated`.
-- Kategória, typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia alebo AI.
-- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore.
+- `kategoria` sa uloží ako kategória sľubu. Kategória sa vytvorí pri prvom výskyte, ďalšie záznamy s rovnakým názvom ju zdieľajú. Názov poľa je v konštante `CATEGORY_FIELD` v `app/import_promises.py`.
+- Typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia.
+- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore. Ak však nový súbor prinesie kategóriu a sľub ju ešte nemá, doplní mu ju. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
 
 Docker Compose spúšťa import pri štarte sám, spolu so slovníkom pojmov (`python -m app.seed glossary`).
 
