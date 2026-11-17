@@ -71,11 +71,11 @@ Tabuľky zo zámeru (subjekt, dokument, sľub, dôkaz, verdikt, ai_beh, audit) d
 | `objection` | námietka od verejnosti | `promise_id`, `type` (verdikt / dôkaz / citácia / iné), `text`, `link`, `email`, `status`, `resolution`, `handled_by` |
 | `user` | člen redakcie | `email`, `password_hash`, `role` (redaktor / overovateľ / admin), `totp_secret`, `is_active` |
 
-**Hodnoty verdiktu** (`value`): `splneny`, `ciastocne_splneny`, `v_procese`, `nesplneny`, `mimo_kompetencie`, `nemeratelny`. AI môže navrhnúť aj `nedostatok_informacii`, tá sa však nikdy nepublikuje.
+**Hodnoty verdiktu** (`value`): `splneny`, `nesplneny`, `v_procese`. Sú to tie isté 3 stavy ako v prototype. Tím sa rozhodol pre ne namiesto 6 stupňov zo zámeru. Prípady ako „mimo kompetencie“ alebo „nemerateľný“ dostanú jeden z týchto 3 stavov a dôvod sa vysvetlí v texte verdiktu (`explanation`).
+
+AI môže navrhnúť aj `nedostatok_informacii`. Tá slúži len vo vnútri redakcie, nikdy sa nepublikuje a nie je to verejný stav.
 
 **Verzovanie:** sľub má vždy najviac jeden publikovaný verdikt. Nová verzia staršiu označí ako `nahradeny` a nemaže ju. Detail sľubu z týchto verzií skladá históriu.
-
-> **Rozdiel oproti prototypu:** Figma Make pozná len 3 stavy (splnený, nesplnený, v procese). Zámer ich má 6. API bude vracať všetkých 6 a dizajn treba doplniť. Rieši to UX (Marianna) a frontend (Samuel).
 
 ## 4. Funkcie a kroky
 
@@ -298,7 +298,6 @@ B-02 až B-05 sa dajú robiť súbežne, rovnako B-06 a B-07.
 
 | Otázka | Koho sa týka |
 | --- | --- |
-| Prototyp má 3 stavy verdiktu, zámer 6. Doplniť dizajn? | UX, frontend |
 | Ktorý LLM (API alebo open-weight) a kto platí API kľúč? | AI, tím |
 | Majú mať 2FA aj redaktor a overovateľ, nielen admin? | tím |
 | Zobrazovať meno overovateľa pri verdikte, alebo len rolu? (GDPR) | tím, metodika |
