@@ -18,7 +18,9 @@ def list_users(admin: AdminUser, db: DbSession) -> list[UserOut]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_user(body: UserCreate, admin: AdminUser, db: DbSession) -> UserOut:
     """New team member. They set up 2FA themselves after the first login."""
-    return user_service.create_user(db, body.email, body.name, body.role, body.password)
+    return user_service.create_user(
+        db, body.email, body.name, body.role, body.password, actor=admin
+    )
 
 
 @router.patch("/{user_id}")

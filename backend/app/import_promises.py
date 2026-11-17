@@ -21,6 +21,7 @@ from app.core.db import SessionLocal
 from app.core.text import normalize, slugify
 from app.models import Promise, Subject
 from app.models.enums import PromiseState
+from app.services import audit
 
 
 @dataclass
@@ -58,7 +59,7 @@ def _unique_slug(base: str, subject_slug: str, taken: set[str]) -> str:
     return f"{base}-{subject_slug}-{n}"
 
 
-def import_promises(db: Session, records: list[dict]) -> ImportResult:
+def import_promises(db: Session, records: list[dict], source: str = "") -> ImportResult:
     result = ImportResult()
     subjects: dict[str, Subject] = {}
 
@@ -97,6 +98,16 @@ def import_promises(db: Session, records: list[dict]) -> ImportResult:
         existing.add(key)
         result.created += 1
 
+    # One summary entry for the whole import, not one per promise.
+    if result.created:
+        audit.record(
+            db,
+            None,
+            "import",
+            "promise",
+            None,
+            after={"created": result.created, "skipped": result.skipped, "source": source},
+        )
     db.commit()
     return result
 
@@ -106,7 +117,7 @@ def main() -> None:
         sys.exit("Usage: python -m app.import_promises <path/to/sluby.json>")
     records = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
     with SessionLocal() as db:
-        result = import_promises(db, records)
+        result = import_promises(db, records, source=Path(sys.argv[1]).name)
     print(f"Promises imported: {result.created}, skipped: {result.skipped}")
 
 
