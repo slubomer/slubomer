@@ -2,6 +2,8 @@
 
 Serverová časť Sľubomera: API pre web, redakčné rozhranie a AI pipeline.
 
+Čo a v akom poradí budeme stavať, popisuje [plán vývoja backendu](backend-plan.md).
+
 ## Technológie
 
 | Časť | Technológia | Prečo |
