@@ -6,7 +6,7 @@ def test_overview_counts_match_the_list(client):
 
     assert body["total"] == 16
     assert body["by_verdict"] == {"splneny": 5, "nesplneny": 5, "v_procese": 6}
-    assert sum(body["by_verdict"].values()) == body["total"]
+    assert body["unrated"] == 0  # every sample promise has a verdict
 
 
 def test_stats_per_subject(client):

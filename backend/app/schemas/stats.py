@@ -14,9 +14,11 @@ class VerdictCounts(BaseModel):
 class OverviewStats(BaseModel):
     total: int
     by_verdict: VerdictCounts
+    unrated: int  # promises without a published verdict yet
 
 
 class SubjectStats(BaseModel):
     subject: SubjectOut
     total: int
     by_verdict: VerdictCounts
+    unrated: int

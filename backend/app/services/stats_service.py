@@ -12,6 +12,11 @@ _PUBLIC_PROMISE = Promise.state == PromiseState.SCHVALENY
 _PUBLISHED_VERDICT = Verdict.state == VerdictState.PUBLIKOVANY
 
 
+def _rated(counts: VerdictCounts) -> int:
+    """Number of promises that have a published verdict."""
+    return counts.splneny + counts.nesplneny + counts.v_procese
+
+
 def overview(db: Session) -> OverviewStats:
     total = db.scalar(select(func.count(Promise.id)).where(_PUBLIC_PROMISE)) or 0
     rows = db.execute(
@@ -20,7 +25,8 @@ def overview(db: Session) -> OverviewStats:
         .where(_PUBLIC_PROMISE, _PUBLISHED_VERDICT)
         .group_by(Verdict.value)
     ).all()
-    return OverviewStats(total=total, by_verdict=VerdictCounts(**{v.value: n for v, n in rows}))
+    counts = VerdictCounts(**{v.value: n for v, n in rows})
+    return OverviewStats(total=total, by_verdict=counts, unrated=total - _rated(counts))
 
 
 def by_subject(db: Session) -> list[SubjectStats]:
@@ -44,11 +50,16 @@ def by_subject(db: Session) -> list[SubjectStats]:
     for subject_id, value, n in rows:
         counts.setdefault(subject_id, {})[value.value] = n
 
-    return [
-        SubjectStats(
-            subject=SubjectOut.model_validate(s),
-            total=totals.get(s.id, 0),
-            by_verdict=VerdictCounts(**counts.get(s.id, {})),
+    result = []
+    for s in subjects:
+        subject_counts = VerdictCounts(**counts.get(s.id, {}))
+        total = totals.get(s.id, 0)
+        result.append(
+            SubjectStats(
+                subject=SubjectOut.model_validate(s),
+                total=total,
+                by_verdict=subject_counts,
+                unrated=total - _rated(subject_counts),
+            )
         )
-        for s in subjects
-    ]
+    return result
