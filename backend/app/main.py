@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import (
     admin_audit,
+    admin_catalog,
+    admin_promises,
     admin_users,
     auth,
     catalog,
@@ -48,4 +50,6 @@ api_v1.include_router(glossary.router)
 api_v1.include_router(auth.router)
 api_v1.include_router(admin_users.router)
 api_v1.include_router(admin_audit.router)
+api_v1.include_router(admin_promises.router)
+api_v1.include_router(admin_catalog.router)
 app.include_router(api_v1)

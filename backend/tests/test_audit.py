@@ -69,7 +69,7 @@ def test_import_writes_one_summary_entry(empty_factory):
 
     (entry,) = entries(empty_factory)
     assert (entry.action, entry.entity, entry.actor_id) == ("import", "promise", None)
-    assert entry.after == {"created": 3, "skipped": 0, "source": "sluby.json"}
+    assert entry.after == {"created": 3, "categorized": 0, "skipped": 0, "source": "sluby.json"}
 
 
 def test_audit_api_for_editorial_team_only(empty_factory):

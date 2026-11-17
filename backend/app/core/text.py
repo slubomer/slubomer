@@ -25,3 +25,14 @@ def sk_sort_key(text: str) -> str:
     """Sort key for Slovak alphabetical order. "ch" comes after "h"."""
     lowered = text.lower().replace("ch", "h~")
     return "".join(_SK_OWN_LETTERS.get(ch) or normalize(ch) for ch in lowered)
+
+
+def unique_slug(base: str, suffix: str, taken: set[str]) -> str:
+    """First free slug: base, then base-suffix, then base-suffix-2, -3, ..."""
+    for candidate in (base, f"{base}-{suffix}"):
+        if candidate not in taken:
+            return candidate
+    n = 2
+    while f"{base}-{suffix}-{n}" in taken:
+        n += 1
+    return f"{base}-{suffix}-{n}"

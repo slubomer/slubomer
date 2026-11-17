@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+from app.core.text import normalize
 from app.models.category import Category
 from app.models.document import Document
 from app.models.enums import PromiseState, PromiseType, db_enum
@@ -46,3 +47,9 @@ class Promise(Base):
     verdicts: Mapped[list["Verdict"]] = relationship(  # noqa: F821
         back_populates="promise", order_by="Verdict.version.desc()"
     )
+
+    def refresh_search_text(self) -> None:
+        """Call after changing the title, text, category or subject."""
+        category = self.category.label if self.category else ""
+        parts = (self.title, self.description, category, self.subject.name)
+        self.search_text = normalize(" ".join(parts))

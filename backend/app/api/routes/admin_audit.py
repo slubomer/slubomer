@@ -2,19 +2,15 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
-from app.api.deps import require_role
+from app.api.deps import EditorialUser
 from app.core.db import DbSession
-from app.models import User
-from app.models.enums import UserRole
 from app.schemas.audit import AuditEntryOut
 from app.schemas.common import Page
 from app.services import audit
 
 router = APIRouter(prefix="/admin/audit", tags=["admin: audit"])
-
-EditorialUser = Annotated[User, Depends(require_role(UserRole.REDAKTOR, UserRole.OVEROVATEL))]
 
 
 @router.get("")

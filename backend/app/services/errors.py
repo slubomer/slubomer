@@ -32,3 +32,13 @@ class Forbidden(ServiceError):
 
 class TooManyAttempts(ServiceError):
     status_code = 429
+
+
+class Invalid(ServiceError):
+    """The request is well-formed, but the values don't make sense."""
+
+    status_code = 422
+
+
+class ReasonRequired(Invalid):
+    """The change is allowed only with a written reason (it goes to the audit log)."""
