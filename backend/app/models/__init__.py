@@ -10,6 +10,7 @@ from app.models.evidence import Evidence
 from app.models.glossary_term import GlossaryTerm
 from app.models.promise import Promise
 from app.models.subject import Subject
+from app.models.user import User, UserSession
 from app.models.verdict import Verdict
 
 __all__ = [
@@ -20,5 +21,7 @@ __all__ = [
     "GlossaryTerm",
     "Promise",
     "Subject",
+    "User",
+    "UserSession",
     "Verdict",
 ]

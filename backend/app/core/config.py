@@ -15,5 +15,22 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://localhost:5432/slubomer"
     debug: bool = False
 
+    # --- Login ---
+    session_cookie_name: str = "slubomer_session"
+    session_ttl_hours: int = 12
+    # true in production (HTTPS only); false lets the cookie work on http://localhost
+    cookie_secure: bool = False
+    # Failed logins in a row before the account is locked, and for how long.
+    max_failed_logins: int = 5
+    lockout_minutes: int = 15
+
+    # Comma-separated origins allowed to call the API from a browser,
+    # e.g. "http://localhost:3000,https://slubomer.sk". Empty = no CORS.
+    cors_origins: str = ""
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
 
 settings = Settings()
