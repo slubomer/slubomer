@@ -60,6 +60,14 @@ class DocumentKind(StrEnum):
     INE = "ine"
 
 
+class UserRole(StrEnum):
+    """Editorial roles. The public web needs no login."""
+
+    REDAKTOR = "redaktor"  # manages promises and evidence
+    OVEROVATEL = "overovatel"  # political scientist, approves verdicts
+    ADMIN = "admin"  # manages users, must use 2FA
+
+
 class EvidenceRole(StrEnum):
     ZDROJ = "zdroj"  # where the promise was made
     PODKLAD = "podklad"  # what the verdict is based on

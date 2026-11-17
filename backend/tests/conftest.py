@@ -36,12 +36,31 @@ def db(session_factory) -> Iterator[Session]:
         yield session
 
 
-@pytest.fixture
-def client(session_factory) -> Iterator[TestClient]:
+def _use_database(factory: sessionmaker[Session]) -> None:
+    """Point the app's get_db dependency at the given test database."""
+
     def override_get_db() -> Iterator[Session]:
-        with session_factory() as session:
+        with factory() as session:
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+
+
+@pytest.fixture
+def client(session_factory) -> Iterator[TestClient]:
+    _use_database(session_factory)
     yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def empty_factory() -> Iterator[sessionmaker[Session]]:
+    """A fresh empty database for one test (for tests that change data)."""
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    _use_database(factory)
+    yield factory
     app.dependency_overrides.clear()
