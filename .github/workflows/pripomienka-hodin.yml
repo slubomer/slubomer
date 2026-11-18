@@ -1,0 +1,25 @@
+# Umiestnenie v repe: .github/workflows/pripomienka-hodin.yml
+# Potrebuje: secret DISCORD_WEBHOOK_HODINY a variable DISCORD_ROLE_TIM
+# (oboje vypíše setup_discord.py na konci).
+
+name: Pripomienka hodín
+
+on:
+  schedule:
+    - cron: "0 18 * * 0"   # nedeľa 18:00 UTC = 19:00 v Košiciach (zimný čas)
+  workflow_dispatch:        # ručné spustenie na otestovanie
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pošli pripomienku na Discord
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_HODINY }}
+          ROLE_ID: ${{ vars.DISCORD_ROLE_TIM }}
+        run: |
+          payload=$(jq -n --arg role "$ROLE_ID" '{
+            content: "⏰ <@&\($role)> dopíšte si hodiny za tento týždeň: <https://zive-it.kpi.fei.tuke.sk/dashboard>",
+            allowed_mentions: { roles: [$role] }
+          }')
+          curl -fsS -H "Content-Type: application/json" -d "$payload" "$WEBHOOK"
