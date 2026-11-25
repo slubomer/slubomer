@@ -106,7 +106,7 @@ Verejné API je bez prihlásenia. Redakčné časti (`/api/v1/admin/...`) vyžad
 - **2FA** je TOTP (Google Authenticator, Aegis, 1Password a pod.).
 - **Tabuľka používateľov** sa volá `app_user`, lebo `user` je v PostgreSQL vyhradené slovo.
 - **Kontrola rolí v kóde:** `CurrentUser` pre akéhokoľvek prihláseného, `require_role(UserRole.OVEROVATEL)` pre konkrétnu rolu, `AdminUser` pre admina (`app/api/deps.py`).
-- **Nastavenia** (`.env`): `COOKIE_SECURE=true` v produkcii (cookie len cez HTTPS), `CORS_ORIGINS` sú domény frontendu oddelené čiarkou.
+- **Nastavenia** (`.env`): `COOKIE_SECURE` je predvolene `true` (cookie len cez HTTPS), takže produkcia ho nemôže zabudnúť zapnúť. Lokálne bez Dockeru nastav `COOKIE_SECURE=false`, Docker Compose to robí sám. `CORS_ORIGINS` sú domény frontendu oddelené čiarkou.
 
 ### Prvý admin
 
@@ -131,7 +131,8 @@ python -m app.import_promises ../data/sluby.json
 ```
 
 - Strana sa uloží ako `subject` (slug sa vytvorí z názvu), `nazov` ako `title` a `telo` ako `description`.
-- Sľuby sa importujú **bez verdiktu**. Pole `stav` je len zástupná hodnota: verdikt vzniká až po schválení politológom a musí mať dôkaz. Na webe sú také sľuby „zatiaľ nehodnotené“ a štatistiky ich vracajú v poli `unrated`.
+- Sľuby sa importujú ako **návrhy** (`navrh`) a **bez verdiktu**, takže na verejnom webe ešte nie sú. Zverejní ich až redaktor, keď doplní doslovnú citáciu, stranu a dokument a sľub schváli.
+- Pole `stav` sa ignoruje. Formát súboru je zatiaľ len návrh a ešte sa bude meniť.
 - Kategória, typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia alebo AI.
 - Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore.
 
