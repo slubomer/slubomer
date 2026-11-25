@@ -81,7 +81,7 @@ def search(
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
 
     if sort == "title":
-        stmt = stmt.order_by(Promise.title)
+        stmt = stmt.order_by(Promise.title, Promise.id)  # id keeps pages stable for equal titles
     else:
         # Freshly verified first, promises without a verdict at the end.
         stmt = stmt.order_by(Verdict.published_at.desc().nulls_last(), Promise.id)
