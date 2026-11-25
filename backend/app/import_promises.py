@@ -2,8 +2,9 @@
 
 Each record: {"strana": ..., "nazov": ..., "telo": ..., "datum": ..., "stav": ...}
 and optionally "kategoria" (topic, e.g. "Zdravotníctvo").
-Promises are imported without a verdict: "stav" is only a placeholder until a
-political scientist approves a verdict backed by evidence.
+Promises are imported as drafts (navrh) without a verdict, so they are not public
+yet: an editor first adds the verbatim quote, page and document, then approves them.
+"stav" is ignored, it is only a placeholder in the draft file format.
 
 Safe to run repeatedly: promises already in the database are skipped, but they
 get a category if the file has one and they don't have it yet.
@@ -106,7 +107,8 @@ def import_promises(db: Session, records: list[dict], source: str = "") -> Impor
             category=category,
             title=title,
             description=text,
-            state=PromiseState.SCHVALENY,  # visible publicly, without a verdict yet
+            # A draft until the editors add the quote, page and document and approve it.
+            state=PromiseState.NAVRH,
         )
         promise.refresh_search_text()
         db.add(promise)

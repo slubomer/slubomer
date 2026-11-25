@@ -108,7 +108,7 @@ Verejné API je bez prihlásenia. Redakčné časti (`/api/v1/admin/...`) vyžad
 - **2FA** je TOTP (Google Authenticator, Aegis, 1Password a pod.).
 - **Tabuľka používateľov** sa volá `app_user`, lebo `user` je v PostgreSQL vyhradené slovo.
 - **Kontrola rolí v kóde:** `CurrentUser` pre akéhokoľvek prihláseného, `require_role(UserRole.OVEROVATEL)` pre konkrétnu rolu, `AdminUser` pre admina (`app/api/deps.py`).
-- **Nastavenia** (`.env`): `COOKIE_SECURE=true` v produkcii (cookie len cez HTTPS), `CORS_ORIGINS` sú domény frontendu oddelené čiarkou.
+- **Nastavenia** (`.env`): `COOKIE_SECURE` je predvolene `true` (cookie len cez HTTPS), takže produkcia ho nemôže zabudnúť zapnúť. Lokálne bez Dockeru nastav `COOKIE_SECURE=false`, Docker Compose to robí sám. `CORS_ORIGINS` sú domény frontendu oddelené čiarkou.
 
 ### Prvý admin
 
@@ -142,7 +142,8 @@ Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, za
 
 - Verdikt v stave `publikovany` alebo `nahradeny` sa nedá zmeniť ani zmazať. Jediná povolená zmena je `publikovany` → `nahradeny`, keď ho nahradí nová verzia.
 - Nový obsah znamená nový riadok `verdict` s vyšším číslom verzie. Návrhy (`navrh`, `vrateny`) sa upravovať dajú.
-- Stráži to SQLAlchemy udalosť v `app/models/verdict.py`, ktorá pri pokuse vyhodí `VerdictLocked`. Platí to pre akýkoľvek kód, nielen pre API.
+- V PostgreSQL to stráži databázový trigger `verdict_lock` (migrácia 0005), takže pravidlo platí aj pre ručné SQL a hromadné `update()`.
+- Navyše to stráži SQLAlchemy udalosť v `app/models/verdict.py`. Tá vyhodí `VerdictLocked` (API vráti 409) a pokrýva aj SQLite v testoch.
 
 ## Redakčné API
 
@@ -154,10 +155,10 @@ Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len 
 | `GET /api/v1/admin/promises/{id}` | Detail s dôkazmi, komentármi a všetkými verziami verdiktu, aj návrhmi |
 | `POST /api/v1/admin/promises` | Nový sľub ručne. Začína ako `navrh`, verejne viditeľný je až po schválení |
 | `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
-| `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe |
+| `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe. Sľub musí mať doslovnú citáciu, stranu a dokument, inak 422 |
 | `POST /api/v1/admin/promises/{id}/reject` | Zamietne sľub (napr. nie je to sľub, duplikát). Dôvod je povinný |
 | `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou |
-| `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite |
+| `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite. Podklad (`podklad`) publikovaného verdiktu sa zmazať nedá (409) |
 | `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
 | `GET/POST /api/v1/admin/categories`, `PATCH .../{id}` | Správa kategórií. Slug sa pri premenovaní nemení |
 | `POST /api/v1/admin/promises/{id}/comments` | Komentár politológa. Sľub ich môže mať viac, verejne sa zobrazia všetky. Len overovateľ a admin |
@@ -183,7 +184,8 @@ python -m app.import_promises ../data/sluby.json
 ```
 
 - Strana sa uloží ako `subject` (slug sa vytvorí z názvu), `nazov` ako `title` a `telo` ako `description`.
-- Sľuby sa importujú **bez verdiktu**. Pole `stav` je len zástupná hodnota: verdikt vzniká až po schválení politológom a musí mať dôkaz. Na webe sú také sľuby „zatiaľ nehodnotené“ a štatistiky ich vracajú v poli `unrated`.
+- Sľuby sa importujú ako **návrhy** (`navrh`) a **bez verdiktu**, takže na verejnom webe ešte nie sú. Zverejní ich až redaktor, keď doplní doslovnú citáciu, stranu a dokument a sľub schváli.
+- Pole `stav` sa ignoruje. Formát súboru je zatiaľ len návrh a ešte sa bude meniť.
 - `kategoria` sa uloží ako kategória sľubu. Kategória sa vytvorí pri prvom výskyte, ďalšie záznamy s rovnakým názvom ju zdieľajú. Názov poľa je v konštante `CATEGORY_FIELD` v `app/import_promises.py`.
 - Typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia.
 - Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore. Ak však nový súbor prinesie kategóriu a sľub ju ešte nemá, doplní mu ju. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
