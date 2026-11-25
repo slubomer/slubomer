@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.enums import VerdictState, VerdictValue, db_enum
+from app.services.errors import Conflict
 
 
 class Verdict(Base):
@@ -31,13 +32,15 @@ class Verdict(Base):
     promise: Mapped["Promise"] = relationship(back_populates="verdicts")  # noqa: F821
 
 
-class VerdictLocked(Exception):
-    """Attempt to change a verdict that was already published."""
+class VerdictLocked(Conflict):
+    """Attempt to change a verdict that was already published (HTTP 409)."""
 
 
 # Once published, a verdict version is history: the only allowed change is
 # publikovany -> nahradeny when a newer version replaces it. New content means
 # a new Verdict row with a higher version.
+# In PostgreSQL a trigger enforces the same rule for raw SQL and bulk updates
+# (migration 0005). This ORM check gives a clear error and covers SQLite in tests.
 _FROZEN_STATES = {VerdictState.PUBLIKOVANY, VerdictState.NAHRADENY}
 
 

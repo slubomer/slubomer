@@ -18,8 +18,9 @@ class Settings(BaseSettings):
     # --- Login ---
     session_cookie_name: str = "slubomer_session"
     session_ttl_hours: int = 12
-    # true in production (HTTPS only); false lets the cookie work on http://localhost
-    cookie_secure: bool = False
+    # Session cookie only over HTTPS. Secure by default, so production can't forget it;
+    # set COOKIE_SECURE=false for http://localhost (docker-compose does it already).
+    cookie_secure: bool = True
     # Failed logins in a row before the account is locked, and for how long.
     max_failed_logins: int = 5
     lockout_minutes: int = 15

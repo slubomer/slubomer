@@ -10,6 +10,7 @@ from app.core.db import get_db
 from app.import_promises import import_promises
 from app.main import app
 from app.models import Base, Category, Promise, Subject, Verdict
+from app.models.enums import PromiseState
 
 RECORDS = [
     {
@@ -106,7 +107,8 @@ def test_reimport_fills_missing_categories(factory):
         assert db.scalar(select(func.count(Promise.id)).where(Promise.category_id.is_(None))) == 0
 
 
-def test_imported_promises_in_api(factory):
+def test_imported_promises_are_drafts(factory):
+    """Without a quote and source they must not reach the public web."""
     with factory() as db:
         import_promises(db, RECORDS)
 
@@ -118,17 +120,14 @@ def test_imported_promises_in_api(factory):
     try:
         client = TestClient(app)
         items = client.get("/api/v1/promises", params={"q": "cyklotrasy"}).json()["items"]
-        detail = client.get("/api/v1/promises/lacnejsie-lieky").json()
+        detail = client.get("/api/v1/promises/lacnejsie-lieky")
         stats = client.get("/api/v1/stats/overview").json()
     finally:
         app.dependency_overrides.clear()
 
-    assert len(items) == 2
-    assert items[0]["category"] is None and items[0]["verdict"] is None
-    assert detail["description"] == "Znížime doplatky za lieky."
-    assert detail["quote"] is None and detail["history"] == []
-    assert stats == {
-        "total": 3,
-        "by_verdict": {"splneny": 0, "nesplneny": 0, "v_procese": 0},
-        "unrated": 3,
-    }
+    assert items == []
+    assert detail.status_code == 404
+    assert stats["total"] == 0
+    with factory() as db:
+        states = set(db.scalars(select(Promise.state)))
+    assert states == {PromiseState.NAVRH}

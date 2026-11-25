@@ -11,10 +11,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.db import get_db
 from app.main import app
 from app.models import Base
 from app.seed import seed
+
+# The test client talks plain http://testserver, a Secure cookie would never be sent back.
+settings.cookie_secure = False
 
 
 @pytest.fixture(scope="session")
