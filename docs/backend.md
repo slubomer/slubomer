@@ -77,6 +77,49 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 
 Hodnoty verdiktu sú `splneny`, `nesplneny` a `v_procese`. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
+## Prihlasovanie a roly
+
+Verejné API je bez prihlásenia. Redakčné časti (`/api/v1/admin/...`) vyžadujú prihlásenie a rolu.
+
+| Rola | Hodnota | Čo smie |
+| --- | --- | --- |
+| Redaktor | `redaktor` | sľuby a dôkazy (B-11) |
+| Overovateľ | `overovatel` | schvaľovanie verdiktov (B-12) |
+| Admin | `admin` | všetko vrátane správy používateľov, **musí mať zapnutú 2FA** |
+
+### Endpointy
+
+| Endpoint | Čo robí |
+| --- | --- |
+| `POST /api/v1/auth/login` | prihlásenie e-mailom a heslom, pri zapnutej 2FA aj s `totp_code`; nastaví session cookie |
+| `POST /api/v1/auth/logout` | odhlásenie, session sa zmaže aj na serveri |
+| `GET /api/v1/auth/me` | prihlásený používateľ |
+| `POST /api/v1/auth/2fa/setup` a `/2fa/confirm` | zapnutie 2FA: najprv kľúč (a `otpauth_uri` pre QR kód), potom potvrdenie prvým kódom |
+| `POST /api/v1/auth/password` | zmena hesla, ostatné prihlásenia sa ukončia |
+| `GET/POST /api/v1/admin/users`, `PATCH /api/v1/admin/users/{id}` | správa používateľov (len admin) |
+
+### Ako to funguje
+
+- **Heslá** sa ukladajú len ako argon2 hash a musia mať aspoň 12 znakov.
+- **Session** je náhodný token v httpOnly cookie `slubomer_session` (SameSite=Lax). V databáze (`user_session`) je len jeho SHA-256 hash, platí 12 hodín. Odhlásenie, deaktivácia účtu a zmena hesla session na serveri zmažú.
+- **Zablokovanie:** po 5 neúspešných pokusoch za sebou sa účet zablokuje na 15 minút.
+- **2FA** je TOTP (Google Authenticator, Aegis, 1Password a pod.).
+- **Tabuľka používateľov** sa volá `app_user`, lebo `user` je v PostgreSQL vyhradené slovo.
+- **Kontrola rolí v kóde:** `CurrentUser` pre akéhokoľvek prihláseného, `require_role(UserRole.OVEROVATEL)` pre konkrétnu rolu, `AdminUser` pre admina (`app/api/deps.py`).
+- **Nastavenia** (`.env`): `COOKIE_SECURE=true` v produkcii (cookie len cez HTTPS), `CORS_ORIGINS` sú domény frontendu oddelené čiarkou.
+
+### Prvý admin
+
+```bash
+docker compose exec backend python -m app.create_admin admin@example.com "Meno Priezvisko"
+```
+
+Príkaz sa opýta na heslo a vypíše kľúč 2FA, ktorý si pridáš do aplikácie. Ďalších ľudí potom pridáva admin cez `POST /api/v1/admin/users`. Tí si 2FA zapnú sami po prvom prihlásení.
+
+### Skúšanie v `/docs`
+
+Swagger beží na rovnakej adrese ako API, takže cookie z `POST /api/v1/auth/login` prehliadač automaticky pošle aj pri ďalších volaniach. Stačí sa prihlásiť cez „Try it out“ a potom volať chránené endpointy.
+
 ## Dáta
 
 ### Sľuby z volebných programov
