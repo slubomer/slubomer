@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.enums import UserRole
-from tests.test_admin_promises import API, NEW_PROMISE, audit_entries, editor  # noqa: F401
+from tests.test_admin_promises import API, audit_entries, editor, sourced_promise  # noqa: F401
 from tests.test_auth import login, make_user
 
 PUBLIC = "/api/v1/promises/nove-cyklotrasy"
@@ -16,7 +16,7 @@ TERM = {"name": "Koalícia", "short": "Spojenie strán.", "example": "Vládna ko
 @pytest.fixture
 def promise_id(editor) -> int:  # noqa: F811
     """An approved (public) promise, created by the editor."""
-    promise_id = editor.post(f"{API}/promises", json=NEW_PROMISE).json()["id"]
+    promise_id = editor.post(f"{API}/promises", json=sourced_promise(editor)).json()["id"]
     editor.post(f"{API}/promises/{promise_id}/approve")
     return promise_id
 
