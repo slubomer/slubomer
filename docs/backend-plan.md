@@ -40,8 +40,9 @@ Redakčné rozhranie ─────┼──> FastAPI /api/v1 ──> služby (
 - Kód ide cestou **routa → služba → model** (viď [backend.md](backend.md)).
 - **Verejné API** (`/api/v1/...`) je bez prihlásenia a len na čítanie. Výnimkou je odoslanie námietky.
 - **Redakčné API** (`/api/v1/admin/...`) vyžaduje prihlásenie a rolu.
-- **AI úlohy** bežia na pozadí a nie v requeste, lebo spracovanie PDF trvá dlho. Začneme jednoduchou tabuľkou úloh, ktorú spracúva samostatný worker. Ak to nebude stačiť, prejdeme na frontu (napr. arq + Redis).
-- **Súbory** (PDF, archivované kópie) sú mimo gitu, v úložisku na disku servera (Docker volume). V databáze je len cesta k súboru a jeho SHA-256 hash.
+- **Sľuby** sa do systému nahrávajú ako **JSON** (rozhodnutie tímu z 25. 11. 2026). Z PDF programov sa sľuby neextrahujú.
+- **AI úlohy** (hľadanie dôkazov a návrh verdiktu) bežia na pozadí a nie v requeste, lebo trvajú dlho. Začneme jednoduchou tabuľkou úloh, ktorú spracúva samostatný worker. Ak to nebude stačiť, prejdeme na frontu (napr. arq + Redis).
+- **Súbory** (dokumenty k dôkazom ako PDF, archivované kópie) sú mimo gitu, v úložisku na disku servera (Docker volume). V databáze je len cesta k súboru a jeho SHA-256 hash.
 
 ### Dohody pre API
 
@@ -64,7 +65,7 @@ Tabuľky zo zámeru (subjekt, dokument, sľub, dôkaz, verdikt, ai_beh, audit) d
 | `promise` | sľub | `slug`, `subject_id`, `document_id`, `category_id`, `title`, `quote` (doslovne), `page`, `type` (konkrétny / zákon / stavba / vágny), `state` (návrh / schválený / zamietnutý), `ai_run_id` |
 | `evidence` | dôkaz k sľubu | `promise_id`, `document_id`, `page`, `quote`, `role` (zdroj sľubu / podklad k hodnoteniu), `ai_run_id`, `added_by` |
 | `verdict` | verzia hodnotenia sľubu | `promise_id`, `version`, `value`, `explanation`, `state` (návrh / vrátený / publikovaný / nahradený), `confidence`, `ai_run_id`, `reviewed_by`, `review_reason`, `published_at` |
-| `ai_run` | log jedného AI kroku | `step` (extrakcia / dôkazy / verdikt), `prompt_name`, `prompt_version`, `model`, `input`, `output`, `confidence`, `tokens`, `duration_ms`, `error` |
+| `ai_run` | log jedného AI kroku | `step` (dôkazy / verdikt), `prompt_name`, `prompt_version`, `model`, `input`, `output`, `confidence`, `tokens`, `duration_ms`, `error` |
 | `job` | úloha na pozadí | `kind`, `payload`, `status`, `attempts`, `error` |
 | `audit_log` | kto, čo a kedy zmenil | `actor_id`, `action`, `entity`, `entity_id`, `before`, `after`, `reason`, `created_at` |
 | `glossary_term` | pojem v slovníku | `slug`, `name`, `short`, `long`, `example`, `wiki_url`, `stems` |
@@ -196,6 +197,8 @@ Tabuľky z kapitoly 3 a skúšobné dáta, s ktorými môže frontend hneď prac
 
 #### B-10 Dokumenty: nahrávanie PDF, archivácia a hash
 
+Ide o dokumenty, z ktorých sa berú dôkazy (zákony, uznesenia, rozpočty, zmluvy) a programy ako zdroj sľubu. Sľuby sa z nich neextrahujú, prichádzajú ako JSON (B-13).
+
 - `POST /api/v1/admin/documents` (nahratie PDF alebo zadanie URL)
 - `GET /api/v1/admin/documents`
 
@@ -205,7 +208,7 @@ Tabuľky z kapitoly 3 a skúšobné dáta, s ktorými môže frontend hneď prac
 4. Limity: iba PDF, max. veľkosť napr. 50 MB, kontrola typu súboru podľa obsahu.
 5. Testy: hash, duplikát, PDF bez textovej vrstvy (zalogovať a označiť, OCR riešime neskôr).
 
-**Hotovo, keď** redaktor nahrá program strany a v databáze je dokument s hashom, kópiou a textom po stranách.
+**Hotovo, keď** redaktor nahrá dokument a v databáze je dokument s hashom, kópiou a textom po stranách.
 
 #### B-11 Redakčné API: správa sľubov
 
@@ -214,7 +217,7 @@ Tabuľky z kapitoly 3 a skúšobné dáta, s ktorými môže frontend hneď prac
 - `POST/DELETE /api/v1/admin/promises/{id}/evidence`
 - `GET/POST/PATCH /api/v1/admin/glossary`
 
-1. Redaktor vidí sľuby navrhnuté AI, opraví názov, kategóriu a typ, potom ich schváli alebo zamietne.
+1. Redaktor vidí sľuby nahraté z JSON (ako návrhy), opraví názov, kategóriu a typ, potom ich schváli alebo zamietne.
 2. Doslovnú citáciu a stranu nemožno upraviť bez zdôvodnenia, lebo musia sedieť s dokumentom.
 3. Redaktor môže ručne pridať dôkaz z nahraného dokumentu.
 4. Všetko ide do auditu (B-09).
@@ -239,24 +242,29 @@ Tabuľky z kapitoly 3 a skúšobné dáta, s ktorými môže frontend hneď prac
 
 Prompty, schémy a vyhodnotenie presnosti má na starosti AI (Richard). Backend ich spúšťa, ukladá a loguje. Prompty sú súbory v `ai/prompts/`, backend ich načíta podľa názvu a verzie.
 
-#### B-13 AI extrakcia sľubov z PDF (F-04)
+#### B-13 Import sľubov z JSON cez redakčné API (F-04)
 
-1. Spoločný klient na LLM v `app/ai/`: teplota 0, JSON výstup, validácia cez Pydantic schému, opakovanie pri chybe, kľúč len z `.env`.
-2. Každé volanie zapíše `ai_run` (prompt a verzia, model, vstup, výstup, istota, tokeny, čas).
-3. Úloha na pozadí: dokument → po častiach na extrakciu → návrhy sľubov so stavom `navrh`.
-4. Kontrola citácie: doslovný text musí naozaj byť na uvedenej strane. Ak nie je, sľub dostane príznak na kontrolu.
-5. `POST /api/v1/admin/documents/{id}/extract` spustí úlohu, `GET /api/v1/admin/jobs/{id}` vráti jej stav.
-6. Testy s falošným LLM klientom, aby nepotrebovali API kľúč.
+Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Formát súboru pripravuje tím dát. Dnes existuje príkaz `python -m app.import_promises` pre návrh formátu (`strana`, `nazov`, `telo`, voliteľne `kategoria`).
 
-**Hotovo, keď** po nahratí programu vzniknú návrhy sľubov s citáciou a stranou a každý krok je v `ai_run`.
+- `POST /api/v1/admin/promises/import` (redaktor nahrá JSON súbor)
+
+1. Kontrola formátu podľa Pydantic schémy. Pri chybe API vráti 422 so zoznamom chybných záznamov a nič neuloží.
+2. Sľuby vzniknú ako návrhy (`navrh`). Opakovaný import duplikáty preskočí, rovnako ako príkaz v termináli.
+3. Ak JSON obsahuje doslovnú citáciu, stranu a zdroj (URL programu), import ich vyplní a zdrojový dokument založí alebo nájde.
+4. Výsledok: počet nových, preskočených a chybných záznamov. Import ide do auditu (B-09).
+5. Príkaz v termináli a endpoint používajú tú istú službu.
+6. Testy: platný súbor, chybný súbor, opakovaný import, oprávnenia.
+
+**Hotovo, keď** redaktor nahrá JSON cez API a sľuby sa objavia ako návrhy v redakčnom zozname.
 
 #### B-14 AI dôkazy a návrh verdiktu (F-05)
 
-1. Embeddingy textu dokumentov do `document_chunk` (pgvector).
-2. Hľadanie kandidátov na dôkaz: najprv vektorové a fulltextové hľadanie v našich dokumentoch, potom AI vyberie relevantné úryvky.
-3. Návrh verdiktu: AI dostane sľub a dôkazy a vráti hodnotu, krátke vysvetlenie, citáciu a istotu. Môže vrátiť aj `nedostatok_informacii`.
-4. Výsledok je `verdict` so stavom `navrh`. Odtiaľ ide k overovateľovi (B-12).
-5. Testy s falošným LLM klientom: dôkaz bez citácie sa neuloží, výstup mimo schémy skončí chybou v `ai_run`.
+1. Spoločný klient na LLM v `app/ai/`: teplota 0, JSON výstup, validácia cez Pydantic schému, opakovanie pri chybe, kľúč len z `.env`. Každé volanie zapíše `ai_run` (prompt a verzia, model, vstup, výstup, istota, tokeny, čas). Testy s falošným LLM klientom, aby nepotrebovali API kľúč.
+2. Embeddingy textu dokumentov do `document_chunk` (pgvector).
+3. Hľadanie kandidátov na dôkaz: najprv vektorové a fulltextové hľadanie v našich dokumentoch, potom AI vyberie relevantné úryvky.
+4. Návrh verdiktu: AI dostane sľub a dôkazy a vráti hodnotu, krátke vysvetlenie, citáciu a istotu. Môže vrátiť aj `nedostatok_informacii`.
+5. Výsledok je `verdict` so stavom `navrh`. Odtiaľ ide k overovateľovi (B-12).
+6. Testy s falošným LLM klientom: dôkaz bez citácie sa neuloží, výstup mimo schémy skončí chybou v `ai_run`.
 
 **Hotovo, keď** pre schválený sľub vznikne návrh verdiktu s aspoň jedným citovaným dôkazom.
 
@@ -287,7 +295,8 @@ Prompty, schémy a vyhodnotenie presnosti má na starosti AI (Richard). Backend 
 ```
 B-01 ──> B-02, B-03, B-04, B-05, B-06, B-07
 B-08 ──> B-09 ──> B-10, B-11, B-12
-B-10 ──> B-13 ──> B-14 ──> B-15
+B-11 ──> B-13
+B-10 ──> B-14 ──> B-15
 B-11, B-14 ──> B-12
 všetko ──> B-16
 ```
@@ -299,6 +308,7 @@ B-02 až B-05 sa dajú robiť súbežne, rovnako B-06 a B-07.
 | Otázka | Koho sa týka |
 | --- | --- |
 | Ktorý LLM (API alebo open-weight) a kto platí API kľúč? | AI, tím |
+| Aké polia bude mať finálny JSON so sľubmi (doslovná citácia, strana, URL programu)? Schválenie sľubu dnes vyžaduje citáciu, stranu a dokument. Ak ich JSON mať nebude, podmienku upravíme. | dáta, tím |
 | Majú mať 2FA aj redaktor a overovateľ, nielen admin? | tím |
 | Zobrazovať meno overovateľa pri verdikte, alebo len rolu? (GDPR) | tím, metodika |
 | Fotky k sľubom: vlastné, z fotobanky, alebo žiadne? | UX |
