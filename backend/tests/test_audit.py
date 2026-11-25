@@ -120,8 +120,10 @@ def test_published_verdict_cannot_be_changed_or_deleted(empty_factory):
 
     with empty_factory() as db:
         db.delete(db.get(Verdict, verdict_id))
-        with pytest.raises(VerdictLocked):
+        with pytest.raises(VerdictLocked) as error:
             db.commit()
+    # A service error, so the API answers 409 instead of 500.
+    assert error.value.status_code == 409
 
 
 def test_published_verdict_can_only_be_superseded(empty_factory):

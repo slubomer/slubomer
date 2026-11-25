@@ -140,7 +140,8 @@ Zatiaľ sa zapisujú zmeny používateľov (vytvorenie, úprava, reset a zmena h
 
 - Verdikt v stave `publikovany` alebo `nahradeny` sa nedá zmeniť ani zmazať. Jediná povolená zmena je `publikovany` → `nahradeny`, keď ho nahradí nová verzia.
 - Nový obsah znamená nový riadok `verdict` s vyšším číslom verzie. Návrhy (`navrh`, `vrateny`) sa upravovať dajú.
-- Stráži to SQLAlchemy udalosť v `app/models/verdict.py`, ktorá pri pokuse vyhodí `VerdictLocked`. Platí to pre akýkoľvek kód, nielen pre API.
+- V PostgreSQL to stráži databázový trigger `verdict_lock` (migrácia 0005), takže pravidlo platí aj pre ručné SQL a hromadné `update()`.
+- Navyše to stráži SQLAlchemy udalosť v `app/models/verdict.py`. Tá vyhodí `VerdictLocked` (API vráti 409) a pokrýva aj SQLite v testoch.
 
 ## Dáta
 
