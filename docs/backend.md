@@ -153,10 +153,10 @@ Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len 
 | `GET /api/v1/admin/promises/{id}` | Detail s dôkazmi a všetkými verziami verdiktu, aj návrhmi |
 | `POST /api/v1/admin/promises` | Nový sľub ručne. Začína ako `navrh`, verejne viditeľný je až po schválení |
 | `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
-| `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe |
+| `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe. Sľub musí mať doslovnú citáciu, stranu a dokument, inak 422 |
 | `POST /api/v1/admin/promises/{id}/reject` | Zamietne sľub (napr. nie je to sľub, duplikát). Dôvod je povinný |
 | `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou |
-| `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite |
+| `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite. Podklad (`podklad`) publikovaného verdiktu sa zmazať nedá (409) |
 | `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
 | `GET/POST /api/v1/admin/categories`, `PATCH .../{id}` | Správa kategórií. Slug sa pri premenovaní nemení |
 | `GET/POST /api/v1/admin/glossary`, `PATCH .../{id}` | Správa slovníka pojmov |

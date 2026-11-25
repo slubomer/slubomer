@@ -9,8 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.text import normalize, slugify, unique_slug
-from app.models import Category, Document, Evidence, Promise, Subject, User
-from app.models.enums import PromiseState
+from app.models import Category, Document, Evidence, Promise, Subject, User, Verdict
+from app.models.enums import EvidenceRole, PromiseState, VerdictState
 from app.schemas.admin import PromiseAdminDetail, PromiseAdminItem
 from app.schemas.common import Page
 from app.services import audit
@@ -19,6 +19,8 @@ from app.services.errors import Conflict, Invalid, NotFound, ReasonRequired
 # Once filled in, these are the evidence of what was promised: no silent rewrites.
 PROTECTED_FIELDS = ("quote", "page")
 REQUIRED_FIELDS = ("subject", "title", "description")
+# Where the promise comes from: needed before it can go public.
+SOURCE_FIELDS = {"quote": "doslovná citácia", "page": "strana", "document": "dokument"}
 
 
 # --- Reading ----------------------------------------------------------------
@@ -188,7 +190,11 @@ def _set_state(
 
 
 def approve(db: Session, actor: User, promise_id: int) -> PromiseAdminDetail:
-    """The promise appears on the public web."""
+    """The promise appears on the public web. It must say where it comes from."""
+    promise = _get(db, promise_id)
+    missing = [label for field, label in SOURCE_FIELDS.items() if getattr(promise, field) is None]
+    if missing:
+        raise Invalid("Pred schválením doplň: " + ", ".join(missing))
     return _set_state(db, actor, promise_id, PromiseState.SCHVALENY)
 
 
@@ -213,12 +219,22 @@ def add_evidence(
     return get_detail(db, promise.id)
 
 
+def _has_published_verdict(db: Session, promise_id: int) -> bool:
+    published = select(Verdict.id).where(
+        Verdict.promise_id == promise_id, Verdict.state == VerdictState.PUBLIKOVANY
+    )
+    return db.scalar(published.limit(1)) is not None
+
+
 def delete_evidence(
     db: Session, actor: User, promise_id: int, evidence_id: int, reason: str
 ) -> PromiseAdminDetail:
     evidence = db.get(Evidence, evidence_id)
     if evidence is None or evidence.promise_id != promise_id:
         raise NotFound("Dôkaz sa nenašiel")
+    # A public verdict must keep the evidence it is based on.
+    if evidence.role == EvidenceRole.PODKLAD and _has_published_verdict(db, promise_id):
+        raise Conflict("Podklad publikovaného verdiktu sa nedá zmazať")
     # The whole row goes to the log, so the evidence can be restored if needed.
     before = audit.snapshot(evidence)
     audit.record(db, actor, "delete", "evidence", evidence.id, before=before, reason=reason)

@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.main import app
-from app.models import AuditLog, Subject
-from app.models.enums import UserRole
+from app.models import AuditLog, Subject, Verdict
+from app.models.enums import UserRole, VerdictState, VerdictValue
 from tests.test_auth import login, make_user
 
 API = "/api/v1/admin"
@@ -39,8 +39,13 @@ def new_document(editor: TestClient) -> int:
     return response.json()["id"]
 
 
+def sourced_promise(editor: TestClient) -> dict:
+    """Body of a new promise with everything approval needs: quote, page and document."""
+    return {**NEW_PROMISE, "document_id": new_document(editor), "quote": "100 km", "page": 3}
+
+
 def test_new_promise_is_public_only_after_approval(editor, empty_factory):
-    created = editor.post(f"{API}/promises", json=NEW_PROMISE)
+    created = editor.post(f"{API}/promises", json=sourced_promise(editor))
     assert created.status_code == 201
     promise = created.json()
     assert promise["state"] == "navrh" and promise["slug"] == "nove-cyklotrasy"
@@ -58,8 +63,20 @@ def test_new_promise_is_public_only_after_approval(editor, empty_factory):
     assert actions == ["create", "approve"]
 
 
-def test_reject_needs_reason_and_hides_promise(editor, empty_factory):
+def test_approval_needs_quote_page_and_document(editor):
     promise_id = editor.post(f"{API}/promises", json=NEW_PROMISE).json()["id"]
+
+    refused = editor.post(f"{API}/promises/{promise_id}/approve")
+    assert refused.status_code == 422
+    assert "citácia" in refused.json()["detail"] and "dokument" in refused.json()["detail"]
+
+    filled = {"document_id": new_document(editor), "quote": "100 km", "page": 3}
+    editor.patch(f"{API}/promises/{promise_id}", json=filled)
+    assert editor.post(f"{API}/promises/{promise_id}/approve").status_code == 200
+
+
+def test_reject_needs_reason_and_hides_promise(editor, empty_factory):
+    promise_id = editor.post(f"{API}/promises", json=sourced_promise(editor)).json()["id"]
     editor.post(f"{API}/promises/{promise_id}/approve")
 
     assert editor.post(f"{API}/promises/{promise_id}/reject", json={}).status_code == 422
@@ -95,7 +112,7 @@ def test_changing_filled_quote_needs_reason(editor, empty_factory):
 
 def test_update_changes_category_and_search(editor):
     category = editor.post(f"{API}/categories", json={"label": "Doprava"}).json()
-    promise_id = editor.post(f"{API}/promises", json=NEW_PROMISE).json()["id"]
+    promise_id = editor.post(f"{API}/promises", json=sourced_promise(editor)).json()["id"]
     editor.post(f"{API}/promises/{promise_id}/approve")
 
     updated = editor.patch(
@@ -138,6 +155,36 @@ def test_evidence_add_and_delete_with_reason(editor, empty_factory):
     assert deleted.json()["evidence"] == []
     removed = audit_entries(empty_factory, "evidence")[-1]
     assert removed.action == "delete" and removed.before["quote"] == "100 km cyklotrás"
+
+
+def test_evidence_of_published_verdict_cannot_be_deleted(editor, empty_factory):
+    promise_id = editor.post(f"{API}/promises", json=NEW_PROMISE).json()["id"]
+    document_id = new_document(editor)
+    added = {"document_id": document_id, "quote": "Zákon prijatý", "page": 1}
+    detail = editor.post(
+        f"{API}/promises/{promise_id}/evidence", json={**added, "role": "podklad"}
+    ).json()
+    detail = editor.post(
+        f"{API}/promises/{promise_id}/evidence", json={**added, "role": "zdroj"}
+    ).json()
+    basis, source = detail["evidence"]
+    with empty_factory() as db:
+        db.add(
+            Verdict(
+                promise_id=promise_id,
+                version=1,
+                value=VerdictValue.SPLNENY,
+                explanation="Zákon bol prijatý.",
+                state=VerdictState.PUBLIKOVANY,
+            )
+        )
+        db.commit()
+
+    url = f"{API}/promises/{promise_id}/evidence"
+    reason = {"reason": "Skúška"}
+    assert editor.delete(f"{url}/{basis['id']}", params=reason).status_code == 409
+    # Where the promise was made (zdroj) is not what the verdict rests on.
+    assert editor.delete(f"{url}/{source['id']}", params=reason).status_code == 200
 
 
 def test_verifier_reads_but_cannot_change(editor, empty_factory):
