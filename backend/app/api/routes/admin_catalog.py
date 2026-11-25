@@ -1,9 +1,12 @@
 """Editorial management of documents, categories and the glossary.
 
 The editor (redaktor) makes changes, the verifier (overovatel) may only read.
+The glossary is the exception: both of them (and the admin) may edit it.
 """
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, status
 
 from app.api.deps import EditorialUser, EditorUser
 from app.core.db import DbSession
@@ -68,13 +71,28 @@ def list_terms(user: EditorialUser, db: DbSession) -> list[GlossaryTermAdminOut]
 
 
 @router.post("/glossary", status_code=status.HTTP_201_CREATED, tags=["admin: glossary"])
-def create_term(body: GlossaryTermCreate, user: EditorUser, db: DbSession) -> GlossaryTermAdminOut:
+def create_term(
+    body: GlossaryTermCreate, user: EditorialUser, db: DbSession
+) -> GlossaryTermAdminOut:
     return glossary_service.create_term(db, user, body.model_dump())
 
 
 @router.patch("/glossary/{term_id}", tags=["admin: glossary"])
 def update_term(
-    term_id: int, body: GlossaryTermUpdate, user: EditorUser, db: DbSession
+    term_id: int, body: GlossaryTermUpdate, user: EditorialUser, db: DbSession
 ) -> GlossaryTermAdminOut:
     """The slug stays the same, so links to the term keep working."""
     return glossary_service.update_term(db, user, term_id, body.model_dump(exclude_unset=True))
+
+
+@router.delete(
+    "/glossary/{term_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["admin: glossary"]
+)
+def delete_term(
+    term_id: int,
+    user: EditorialUser,
+    db: DbSession,
+    reason: Annotated[str, Query(min_length=3, max_length=1000, description="Prečo sa maže")],
+) -> None:
+    """The whole term goes to the audit log, so it can be restored."""
+    glossary_service.delete_term(db, user, term_id, reason)

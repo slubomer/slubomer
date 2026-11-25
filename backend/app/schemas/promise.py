@@ -35,6 +35,15 @@ class EvidenceOut(ApiModel):
     document: DocumentOut
 
 
+class CommentOut(ApiModel):
+    """A political scientist's comment. Role only, no name (GDPR)."""
+
+    author_role: str
+    text: str
+    created_at: datetime
+    updated_at: datetime | None
+
+
 class PromiseListItem(ApiModel):
     slug: str
     title: str
@@ -42,6 +51,9 @@ class PromiseListItem(ApiModel):
     subject: SubjectOut
     category: CategoryOut | None  # None = not classified yet
     verdict: VerdictShort | None  # None = not rated yet
+    # A political scientist commented on it ("dovysvetlené").
+    # This is not the same as a verdict approved by a political scientist.
+    explained: bool
 
 
 class PromiseDetail(PromiseListItem):
@@ -53,3 +65,5 @@ class PromiseDetail(PromiseListItem):
     evidence: list[EvidenceOut]
     # All published versions, newest first.
     history: list[VerdictVersion]
+    # All comments by political scientists, oldest first.
+    comments: list[CommentOut]
