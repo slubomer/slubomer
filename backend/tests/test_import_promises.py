@@ -11,7 +11,17 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
-from app.models import AuditLog, Base, Category, Document, Evidence, Promise, Subject, Verdict
+from app.models import (
+    AuditLog,
+    Base,
+    Category,
+    Document,
+    Evidence,
+    Promise,
+    Subject,
+    User,
+    Verdict,
+)
 from app.models.enums import (
     DocumentKind,
     PromiseState,
@@ -21,6 +31,7 @@ from app.models.enums import (
     VerdictValue,
 )
 from app.schemas.promise_import import PromiseImportFile
+from app.services import verdict_service
 from app.services.promise_import_service import import_file
 from tests.test_auth import login, make_user
 
@@ -95,6 +106,15 @@ def factory():
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
+def make_verifier(db) -> User:
+    user = User(
+        email="o@example.com", name="Politológ", role=UserRole.OVEROVATEL, password_hash="x"
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
 def run(db, data: dict = FILE):
     return import_file(db, PromiseImportFile.model_validate(data), source="test")
 
@@ -119,8 +139,12 @@ def test_import_fills_promise_fields_and_subjects(factory):
             7,
             PromiseType.ZAKON,
         )
-        assert promise.state == PromiseState.NAVRH
+        # It has a quote, page and programme, so it is public right away.
+        assert promise.state == PromiseState.SCHVALENY
         assert promise.ai_generated is True
+        # Without a source a promise stays a draft for the editors.
+        unsourced = db.scalar(select(Promise).where(Promise.slug == "nove-cyklotrasy-hnutie-dva"))
+        assert unsourced.state == PromiseState.NAVRH
         assert promise.category.label == "Zdravotníctvo"
         assert promise.document.kind == DocumentKind.PROGRAM
         assert promise.document.title == "Program Strany Jedna"
@@ -129,7 +153,7 @@ def test_import_fills_promise_fields_and_subjects(factory):
         assert {c.slug for c in db.scalars(select(Category))} == {"doprava", "zdravotnictvo"}
 
 
-def test_import_creates_verdict_drafts_with_json_states(factory):
+def test_import_publishes_ai_verdicts_with_json_states(factory):
     with factory() as db:
         run(db)
 
@@ -137,8 +161,22 @@ def test_import_creates_verdict_drafts_with_json_states(factory):
         assert set(verdicts) == {"nove-cyklotrasy", "lacnejsie-lieky"}  # no "stav", no verdict
         verdict = verdicts["lacnejsie-lieky"]
         assert verdict.value == VerdictValue.SPLNENE
-        assert verdict.state == VerdictState.NAVRH  # waits for the verifier
+        assert verdict.state == VerdictState.PUBLIKOVANY and verdict.published_at is not None
         assert (verdict.version, verdict.confidence, verdict.ai_generated) == (1, 0.85, True)
+        assert verdict.verified is False  # only AI so far
+        # "nesplnene" says no evidence was found, so it is published without any.
+        assert verdicts["nove-cyklotrasy"].state == VerdictState.PUBLIKOVANY
+
+
+def test_verdict_without_evidence_stays_draft(factory):
+    data = copy.deepcopy(FILE)
+    data["sluby"][1]["vyhodnotenie"] = []  # "splnene" with nothing behind it
+
+    with factory() as db:
+        run(db, data)
+
+        verdict = db.scalar(select(Verdict).where(Verdict.value == VerdictValue.SPLNENE))
+        assert verdict.state == VerdictState.NAVRH and verdict.published_at is None
 
 
 def test_import_stores_votes_and_web_pages_as_evidence(factory):
@@ -181,7 +219,28 @@ def test_reimport_with_new_state_adds_verdict_version(factory):
         promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
         versions = sorted(((v.version, v.value, v.state) for v in promise.verdicts), reverse=True)
         assert versions == [
-            (2, VerdictValue.CIASTOCNE, VerdictState.NAVRH),
+            (2, VerdictValue.CIASTOCNE, VerdictState.PUBLIKOVANY),
+            (1, VerdictValue.SPLNENE, VerdictState.NAHRADENY),
+        ]
+
+
+def test_reimport_never_replaces_verified_verdict(factory):
+    newer = copy.deepcopy(FILE)
+    newer["sluby"][1]["stav"] = "ciastocne"
+    newer["sluby"][1]["zdovodnenie"] = "Splnená je len časť sľubu."
+
+    with factory() as db:
+        run(db)
+        verdict = db.scalar(select(Verdict).where(Verdict.value == VerdictValue.SPLNENE))
+        verdict_service.verify(db, make_verifier(db), verdict.id, "Zákon som skontroloval.")
+        run(db, newer)
+
+        promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
+        states = sorted(((v.version, v.value, v.state) for v in promise.verdicts), reverse=True)
+        # The new AI result waits as a draft, the verified version stays public.
+        assert states == [
+            (3, VerdictValue.CIASTOCNE, VerdictState.NAVRH),
+            (2, VerdictValue.SPLNENE, VerdictState.PUBLIKOVANY),
             (1, VerdictValue.SPLNENE, VerdictState.NAHRADENY),
         ]
 
@@ -203,7 +262,7 @@ def test_reimport_fills_only_empty_fields(factory):
         assert promise.quote == "Znížime doplatky."  # a filled-in quote is never overwritten
 
 
-def test_imported_promises_are_not_public(factory):
+def test_imported_promises_are_public_as_ai_verdicts(factory):
     with factory() as db:
         run(db)
 
@@ -218,9 +277,14 @@ def test_imported_promises_are_not_public(factory):
     finally:
         app.dependency_overrides.clear()
 
-    assert items == []
-    assert detail.status_code == 404
-    assert stats["total"] == 0
+    # The party with a source is public, the one without stays hidden.
+    assert [i["slug"] for i in items] == ["nove-cyklotrasy"]
+    assert detail.status_code == 200
+    verdict = detail.json()["verdict"]
+    assert verdict["value"] == "splnene"
+    assert (verdict["ai_generated"], verdict["verified"]) == (True, False)
+    assert detail.json()["evidence"][0]["vote"]["celkom_za"] == 80
+    assert stats["total"] == 2 and stats["unrated"] == 0
 
 
 # --- Editorial API ------------------------------------------------------------
@@ -243,8 +307,8 @@ def test_api_import_and_audit(editor, empty_factory):
         "verdicts": 2,
         "evidence": 2,
     }
-    listed = editor.get("/api/v1/admin/promises", params={"state": "navrh"}).json()
-    assert listed["total"] == 3
+    listed = editor.get("/api/v1/admin/promises", params={"state": "schvaleny"}).json()
+    assert listed["total"] == 2
     with empty_factory() as db:
         entry = db.scalar(select(AuditLog).where(AuditLog.action == "import"))
         assert entry.actor_id is not None

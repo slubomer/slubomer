@@ -2,14 +2,21 @@
 
 Used by the command line (app/import_promises.py) and by the editorial API.
 
-- Promises come in as drafts (navrh). Editors approve them before they go public.
-- "stav" + "zdovodnenie" become a verdict draft (navrh) waiting for the verifier.
+AI-rated promises go public right away (team decision 25. 11. 2026):
+- A promise with a quote, page and programme is approved (schvaleny), otherwise
+  it stays a draft (navrh) until an editor fills in the source.
+- "stav" + "zdovodnenie" become a published AI verdict. A political scientist can
+  verify it later (verdict_service.verify). Values that may not go public, or a
+  verdict without evidence (except "nesplnene"), stay a draft.
 - "vyhodnotenie" becomes evidence: votes and web pages, each with its own document.
 - Safe to run repeatedly. A promise already in the database (same party and text)
   only gets what is new: empty fields filled in, new evidence, and a new verdict
-  version when the state or reason changed. Filled-in fields are never overwritten.
+  version when the state or reason changed. Filled-in fields are never overwritten,
+  and a verdict verified by a political scientist is never replaced by AI: the new
+  AI result is only added as a draft for the political scientist.
 """
 
+from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from sqlalchemy import select
@@ -25,9 +32,12 @@ from app.schemas.promise_import import (
     PromiseIn,
 )
 from app.services import audit
+from app.services.verdict_service import publish_problem
 
 # Promise fields filled from the file when they are still empty.
 FILLABLE_FIELDS = ("quote", "page", "document", "type", "category")
+# What a promise needs before it goes public: where it comes from.
+SOURCE_FIELDS = ("quote", "page", "document")
 
 
 class _Importer:
@@ -37,6 +47,7 @@ class _Importer:
         self.db = db
         self.ai_generated = ai_generated
         self.result = ImportResultOut()
+        self.now = datetime.now(UTC)  # one publication time for the whole import
         self.subjects: dict[str, Subject] = {}
         self.categories: dict[str, Category] = {}
         self.documents: dict[tuple, Document] = {}
@@ -44,9 +55,10 @@ class _Importer:
         self.existing = {
             (p.subject_id, normalize(p.description)): p
             for p in db.scalars(
-                select(Promise).options(
-                    selectinload(Promise.evidence), selectinload(Promise.verdicts)
-                )
+                select(Promise)
+                .options(selectinload(Promise.evidence), selectinload(Promise.verdicts))
+                # Fresh lists even when the session already holds these promises.
+                .execution_options(populate_existing=True)
             )
         }
         self.created_now: set[tuple] = set()
@@ -135,6 +147,7 @@ class _Importer:
         else:
             changed = self._fill_empty(promise, fields)
 
+        changed |= self._approve_if_sourced(promise)
         changed |= self._add_evidence(promise, record.vyhodnotenie)
         changed |= self._add_verdict(promise, record)
 
@@ -153,7 +166,7 @@ class _Importer:
             subject=subject,
             title=title,
             description=record.telo.strip(),
-            state=PromiseState.NAVRH,  # public only after an editor approves it
+            state=PromiseState.NAVRH,  # approved below once it has its source
             ai_generated=self.ai_generated,
             **fields,
         )
@@ -173,6 +186,15 @@ class _Importer:
         if changed:
             promise.refresh_search_text()
         return changed
+
+    def _approve_if_sourced(self, promise: Promise) -> bool:
+        """A draft with quote, page and programme goes public. Rejected ones stay hidden."""
+        if promise.state != PromiseState.NAVRH:
+            return False
+        if any(getattr(promise, field) is None for field in SOURCE_FIELDS):
+            return False
+        promise.state = PromiseState.SCHVALENY
+        return True
 
     def _add_evidence(self, promise: Promise, items: list[EvidenceIn]) -> bool:
         known = {e.document_id for e in promise.evidence}
@@ -195,7 +217,7 @@ class _Importer:
         return added
 
     def _add_verdict(self, promise: Promise, record: PromiseIn) -> bool:
-        """A new draft version when the state or reason differs from the latest version."""
+        """A new version when the state or reason differs from the latest version."""
         if record.stav is None:
             return False
         explanation = record.zdovodnenie.strip()
@@ -203,9 +225,17 @@ class _Importer:
         if latest and latest.value == record.stav and latest.explanation == explanation:
             return False
 
-        # An older draft nobody reviewed yet is replaced, so the verifier sees one draft.
+        public = next((v for v in promise.verdicts if v.state == VerdictState.PUBLIKOVANY), None)
+        # Published right away, unless a person already verified the current verdict
+        # or the value may not go public: then it is a draft for the political scientist.
+        publish = (public is None or not public.verified) and (
+            publish_problem(record.stav, promise.evidence) is None
+        )
         for verdict in promise.verdicts:
-            if verdict.state == VerdictState.NAVRH:
+            # One open draft at most; a new public version replaces the old one.
+            if verdict.state == VerdictState.NAVRH or (
+                publish and verdict.state == VerdictState.PUBLIKOVANY
+            ):
                 verdict.state = VerdictState.NAHRADENY
         promise.verdicts.append(
             Verdict(
@@ -213,7 +243,8 @@ class _Importer:
                 value=record.stav,
                 explanation=explanation,
                 confidence=record.confidence,
-                state=VerdictState.NAVRH,
+                state=VerdictState.PUBLIKOVANY if publish else VerdictState.NAVRH,
+                published_at=self.now if publish else None,
                 ai_generated=self.ai_generated,
             )
         )
