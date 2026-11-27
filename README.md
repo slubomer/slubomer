@@ -17,7 +17,7 @@ Projekt je na začiatku. Backend má kostru (FastAPI, PostgreSQL, migrácie), os
 | `frontend/` | webové rozhranie |
 | `data/` | zdroje, import a testovacie sady |
 | `tests/` | testy |
-| `docs/` | dokumentácia a metodika |
+| `docs/` | dokumentácia a metodika – [docs/metodika-hodnotenia.md](docs/metodika-hodnotenia.md) (stavy sľubov a pravidlá hodnotenia) |
 
 ## Spustenie
 

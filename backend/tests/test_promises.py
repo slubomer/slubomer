@@ -11,13 +11,13 @@ def test_list_returns_all_sample_promises(client):
     assert len(body["items"]) == 16
     first = body["items"][0]
     assert first["slug"] == "skoly"  # newest verdict comes first
-    assert first["verdict"]["value"] == "splneny"
+    assert first["verdict"]["value"] == "splnene"
     assert first["subject"]["slug"] == "subjekt-b"
 
 
 def test_filters_combine(client):
     body = client.get(
-        "/api/v1/promises", params={"category": "doprava", "verdict": "v_procese"}
+        "/api/v1/promises", params={"category": "doprava", "verdict": "ciastocne"}
     ).json()
 
     assert {p["slug"] for p in body["items"]} == {"doprava", "cyklotrasy"}
@@ -44,7 +44,7 @@ def test_empty_result(client):
 
 
 def test_invalid_filter_value_returns_422(client):
-    assert client.get("/api/v1/promises", params={"verdict": "ciastocne"}).status_code == 422
+    assert client.get("/api/v1/promises", params={"verdict": "v_procese"}).status_code == 422
 
 
 def test_detail_has_quote_evidence_and_history(client):
@@ -52,10 +52,10 @@ def test_detail_has_quote_evidence_and_history(client):
 
     assert body["quote"].startswith("Do konca volebného obdobia")
     assert body["description"] == body["quote"]
-    assert body["verdict"]["value"] == "nesplneny"
+    assert body["verdict"]["value"] == "nesplnene"
     assert {e["role"] for e in body["evidence"]} == {"zdroj", "podklad"}
     # Newest version first; the older one is kept for history.
-    assert [v["value"] for v in body["history"]] == ["nesplneny", "v_procese"]
+    assert [v["value"] for v in body["history"]] == ["nesplnene", "ciastocne"]
     assert body["ai_generated"] is True
 
 

@@ -21,8 +21,10 @@ from app.schemas.admin import (
     RejectRequest,
 )
 from app.schemas.common import Page
+from app.schemas.promise_import import ImportResultOut, PromiseImportFile
 from app.services import comment_service
 from app.services import promise_admin_service as service
+from app.services.promise_import_service import import_file
 
 router = APIRouter(prefix="/admin/promises", tags=["admin: promises"])
 
@@ -62,6 +64,17 @@ def get_promise(promise_id: int, user: EditorialUser, db: DbSession) -> PromiseA
 def create_promise(body: PromiseCreate, user: EditorUser, db: DbSession) -> PromiseAdminDetail:
     """New promise as a draft (navrh). It is public only after approval."""
     return service.create(db, user, body.model_dump())
+
+
+@router.post("/import")
+def import_promises(body: PromiseImportFile, user: EditorUser, db: DbSession) -> ImportResultOut:
+    """Upload the promise JSON file (format of data/sluby.json) as the request body.
+
+    Promises come in as drafts, "stav" as a verdict draft for the verifier.
+    An invalid file returns 422 with every wrong field and nothing is saved.
+    Importing the same file again creates no duplicates.
+    """
+    return import_file(db, body, actor=user, source="api")
 
 
 @router.patch("/{promise_id}")

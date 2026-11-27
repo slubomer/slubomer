@@ -14,7 +14,7 @@ _PUBLISHED_VERDICT = Verdict.state == VerdictState.PUBLIKOVANY
 
 def _rated(counts: VerdictCounts) -> int:
     """Number of promises that have a published verdict."""
-    return counts.splneny + counts.nesplneny + counts.v_procese
+    return counts.splnene + counts.ciastocne + counts.porusene + counts.nesplnene
 
 
 def overview(db: Session) -> OverviewStats:

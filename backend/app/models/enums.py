@@ -16,17 +16,23 @@ def db_enum(enum_cls: type[StrEnum]) -> Enum:
 
 
 class VerdictValue(StrEnum):
-    """Result of a promise check. Public values match the prototype (3 states)."""
+    """Result of a promise check. Same strings as "stav" in the imported JSON (data/sluby.json)."""
 
-    SPLNENY = "splneny"
-    NESPLNENY = "nesplneny"
-    V_PROCESE = "v_procese"
+    SPLNENE = "splnene"  # the promise was kept
+    CIASTOCNE = "ciastocne"  # work started or only some parts are done
+    PORUSENE = "porusene"  # the party itself made it fail (e.g. its MPs voted the bill down)
+    NESPLNENE = "nesplnene"  # no evidence that anything started
     # AI only: never published, stays inside the editorial team.
     NEDOSTATOK_INFORMACII = "nedostatok_informacii"
 
 
 # Values that may appear on the public web.
-PUBLIC_VERDICT_VALUES = (VerdictValue.SPLNENY, VerdictValue.NESPLNENY, VerdictValue.V_PROCESE)
+PUBLIC_VERDICT_VALUES = (
+    VerdictValue.SPLNENE,
+    VerdictValue.CIASTOCNE,
+    VerdictValue.PORUSENE,
+    VerdictValue.NESPLNENE,
+)
 
 
 class VerdictState(StrEnum):
@@ -57,6 +63,8 @@ class DocumentKind(StrEnum):
     UZNESENIE = "uznesenie"
     ROZPOCET = "rozpocet"
     ZMLUVA = "zmluva"
+    HLASOVANIE = "hlasovanie"  # a vote in the National Council (nrsr.sk)
+    WEB = "web"  # news article or ministry page, only a tip, not a published document
     INE = "ine"
 
 

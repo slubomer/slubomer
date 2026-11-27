@@ -5,11 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.import_promises import import_promises
 from app.main import app
 from app.models import AuditLog, Promise, Subject, Verdict
 from app.models.enums import PromiseState, UserRole, VerdictState, VerdictValue
 from app.models.verdict import VerdictLocked
+from app.schemas.promise_import import PromiseImportFile
+from app.services.promise_import_service import import_file
 from tests.test_auth import PASSWORD, login, make_user
 
 
@@ -59,17 +60,16 @@ def test_password_change_and_2fa_are_logged(empty_factory):
 
 
 def test_import_writes_one_summary_entry(empty_factory):
-    records = [
-        {"strana": "Strana", "nazov": f"Sľub {i}", "telo": f"Text {i}", "datum": None, "stav": ""}
-        for i in range(3)
-    ]
+    records = [{"strana": "Strana", "nazov": f"Sľub {i}", "telo": f"Text {i}"} for i in range(3)]
+    data = PromiseImportFile.model_validate({"sluby": records})
     with empty_factory() as db:
-        import_promises(db, records, source="sluby.json")
-        import_promises(db, records, source="sluby.json")  # nothing new -> no entry
+        import_file(db, data, source="sluby.json")
+        import_file(db, data, source="sluby.json")  # nothing new -> no entry
 
     (entry,) = entries(empty_factory)
     assert (entry.action, entry.entity, entry.actor_id) == ("import", "promise", None)
-    assert entry.after == {"created": 3, "categorized": 0, "skipped": 0, "source": "sluby.json"}
+    assert entry.after["created"] == 3 and entry.after["skipped"] == 0
+    assert entry.after["source"] == "sluby.json"
 
 
 def test_audit_api_for_editorial_team_only(empty_factory):
@@ -100,7 +100,7 @@ def published_verdict(factory) -> int:
         verdict = Verdict(
             promise=promise,
             version=1,
-            value=VerdictValue.V_PROCESE,
+            value=VerdictValue.CIASTOCNE,
             explanation="Pracuje sa na tom.",
             state=VerdictState.PUBLIKOVANY,
         )
@@ -145,7 +145,7 @@ def test_draft_verdict_can_be_edited(empty_factory):
         draft = Verdict(
             promise_id=db.get(Verdict, verdict_id).promise_id,
             version=2,
-            value=VerdictValue.SPLNENY,
+            value=VerdictValue.SPLNENE,
             explanation="Návrh",
             state=VerdictState.NAVRH,
         )

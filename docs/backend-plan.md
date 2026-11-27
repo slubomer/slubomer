@@ -46,7 +46,7 @@ Redakčné rozhranie ─────┼──> FastAPI /api/v1 ──> služby (
 
 ### Dohody pre API
 
-- Prefix `/api/v1`, JSON, názvy polí v angličtine a v `snake_case`.
+- Prefix `/api/v1`, JSON, názvy polí v angličtine a v `snake_case`. Výnimkou je importný súbor sľubov a počty hlasovania (`vote`), ktoré majú slovenské polia rovnako ako `data/sluby.json`.
 - Zoznamy sa stránkujú a vracajú `{ "items": [...], "total": 42, "page": 1, "page_size": 20 }`.
 - Chyby vracajú `{ "detail": "..." }` so správnym HTTP kódom (400, 401, 403, 404, 409, 422, 429).
 - V URL sa používa `slug` (napr. `/promises/zvysime-platy-ucitelov`). Vnútorné ID je celé číslo.
@@ -72,7 +72,7 @@ Tabuľky zo zámeru (subjekt, dokument, sľub, dôkaz, verdikt, ai_beh, audit) d
 | `objection` | námietka od verejnosti | `promise_id`, `type` (verdikt / dôkaz / citácia / iné), `text`, `link`, `email`, `status`, `resolution`, `handled_by` |
 | `user` | člen redakcie | `email`, `password_hash`, `role` (redaktor / overovateľ / admin), `totp_secret`, `is_active` |
 
-**Hodnoty verdiktu** (`value`): `splneny`, `nesplneny`, `v_procese`. Sú to tie isté 3 stavy ako v prototype. Tím sa rozhodol pre ne namiesto 6 stupňov zo zámeru. Prípady ako „mimo kompetencie“ alebo „nemerateľný“ dostanú jeden z týchto 3 stavov a dôvod sa vysvetlí v texte verdiktu (`explanation`).
+**Hodnoty verdiktu** (`value`): `splnene`, `ciastocne`, `porusene`, `nesplnene`. Sú to tie isté 4 stavy ako v importovanom JSON (`data/sluby.json`), pôvodné 3 stavy prototypu (`splneny`, `nesplneny`, `v_procese`) nahradili 27. 11. 2026 (migrácia 0007). Kedy dostane sľub ktorý stav, popisuje [metodika hodnotenia](metodika-hodnotenia.md). Prípady ako „mimo kompetencie“ alebo „nemerateľný“ dostanú jeden z týchto 4 stavov a dôvod sa vysvetlí v texte verdiktu (`explanation`). Frontend a prototyp potrebujú doplniť stav „Porušený“.
 
 AI môže navrhnúť aj `nedostatok_informacii`. Tá slúži len vo vnútri redakcie, nikdy sa nepublikuje a nie je to verejný stav.
 
@@ -233,7 +233,7 @@ Ide o dokumenty, z ktorých sa berú dôkazy (zákony, uznesenia, rozpočty, zml
 1. Schválenie publikuje verdikt, predošlú verziu označí ako nahradenú a nastaví `published_at`.
 2. Úprava vytvorí novú verziu s hodnotou a vysvetlením od overovateľa a odkazom na pôvodný návrh AI.
 3. Vrátenie pošle sľub späť redaktorovi alebo na nové hľadanie dôkazov.
-4. Publikovať sa dá len verdikt, ktorý má aspoň jeden dôkaz z publikovaného dokumentu.
+4. Publikovať sa dá len verdikt, ktorý má aspoň jeden dôkaz z publikovaného dokumentu. Výnimkou je `nesplnene`, ktorého zdôvodnenie hovorí, že sa dôkaz o začatí plnenia nenašiel. Článok z médií (dôkaz `web`) nestačí, overovateľ ho nahradí publikovaným dokumentom (pozri [metodika hodnotenia](metodika-hodnotenia.md#médiá-a-publikovanie)).
 5. Testy: bez dôvodu to neprejde, `nedostatok_informacii` sa nedá publikovať, história ostane celá.
 
 **Hotovo, keď** overovateľ vie schváliť, upraviť aj vrátiť verdikt a na verejnom webe sa ukáže až schválená verzia.
@@ -244,16 +244,18 @@ Prompty, schémy a vyhodnotenie presnosti má na starosti AI (Richard). Backend 
 
 #### B-13 Import sľubov z JSON cez redakčné API (F-04)
 
-Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Formát súboru pripravuje tím dát. Dnes existuje príkaz `python -m app.import_promises` pre návrh formátu (`strana`, `nazov`, `telo`, voliteľne `kategoria`).
+Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Formát pripravil tím dát (`data/sluby.json`, `{"meta", "sluby"}`), popis polí je v [backend.md](backend.md#sľuby-z-volebných-programov). Každý sľub má okrem textu aj citáciu, stranu, program, tému, typ, stav so zdôvodnením a dôkazy (hlasovania NR SR a web).
 
 - `POST /api/v1/admin/promises/import` (redaktor nahrá JSON súbor)
 
 1. Kontrola formátu podľa Pydantic schémy. Pri chybe API vráti 422 so zoznamom chybných záznamov a nič neuloží.
-2. Sľuby vzniknú ako návrhy (`navrh`). Opakovaný import duplikáty preskočí, rovnako ako príkaz v termináli.
-3. Ak JSON obsahuje doslovnú citáciu, stranu a zdroj (URL programu), import ich vyplní a zdrojový dokument založí alebo nájde.
-4. Výsledok: počet nových, preskočených a chybných záznamov. Import ide do auditu (B-09).
-5. Príkaz v termináli a endpoint používajú tú istú službu.
-6. Testy: platný súbor, chybný súbor, opakovaný import, oprávnenia.
+2. Sľuby vzniknú ako návrhy (`navrh`). Opakovaný import duplikáty preskočí, rovnako ako príkaz v termináli. Existujúcemu sľubu doplní len prázdne polia a nové dôkazy.
+3. Import vyplní doslovnú citáciu, stranu a zdrojový program (dokument založí alebo nájde), tému ako kategóriu a typ.
+4. `stav` a `zdovodnenie` sa uložia ako verzia verdiktu v stave `navrh` pre overovateľa. Hodnoty sú 4 stavy z [metodiky hodnotenia](metodika-hodnotenia.md). Zmenený stav pri opakovanom importe pridá novú verziu.
+5. `vyhodnotenie` sa uloží ako dôkazy: hlasovanie (dokument `hlasovanie`, počty v `vote`) a web (dokument `web`, len tip).
+6. Výsledok: počet nových, aktualizovaných a preskočených sľubov, nových verdiktov a dôkazov. Import ide do auditu (B-09).
+7. Príkaz v termináli a endpoint používajú tú istú službu (`app/services/promise_import_service.py`).
+8. Testy: platný súbor, chybný súbor, opakovaný import, nový stav, oprávnenia a platnosť skutočného `data/sluby.json`.
 
 **Hotovo, keď** redaktor nahrá JSON cez API a sľuby sa objavia ako návrhy v redakčnom zozname.
 
@@ -262,7 +264,7 @@ Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Fo
 1. Spoločný klient na LLM v `app/ai/`: teplota 0, JSON výstup, validácia cez Pydantic schému, opakovanie pri chybe, kľúč len z `.env`. Každé volanie zapíše `ai_run` (prompt a verzia, model, vstup, výstup, istota, tokeny, čas). Testy s falošným LLM klientom, aby nepotrebovali API kľúč.
 2. Embeddingy textu dokumentov do `document_chunk` (pgvector).
 3. Hľadanie kandidátov na dôkaz: najprv vektorové a fulltextové hľadanie v našich dokumentoch, potom AI vyberie relevantné úryvky.
-4. Návrh verdiktu: AI dostane sľub a dôkazy a vráti hodnotu, krátke vysvetlenie, citáciu a istotu. Môže vrátiť aj `nedostatok_informacii`.
+4. Návrh verdiktu: AI dostane sľub a dôkazy a vráti hodnotu (`splnene`, `ciastocne`, `porusene`, `nesplnene`), krátke vysvetlenie, citáciu a istotu. Stav určí podľa [metodiky hodnotenia](metodika-hodnotenia.md). Môže vrátiť aj `nedostatok_informacii`.
 5. Výsledok je `verdict` so stavom `navrh`. Odtiaľ ide k overovateľovi (B-12).
 6. Testy s falošným LLM klientom: dôkaz bez citácie sa neuloží, výstup mimo schémy skončí chybou v `ai_run`.
 
@@ -308,7 +310,6 @@ B-02 až B-05 sa dajú robiť súbežne, rovnako B-06 a B-07.
 | Otázka | Koho sa týka |
 | --- | --- |
 | Ktorý LLM (API alebo open-weight) a kto platí API kľúč? | AI, tím |
-| Aké polia bude mať finálny JSON so sľubmi (doslovná citácia, strana, URL programu)? Schválenie sľubu dnes vyžaduje citáciu, stranu a dokument. Ak ich JSON mať nebude, podmienku upravíme. | dáta, tím |
 | Majú mať 2FA aj redaktor a overovateľ, nielen admin? | tím |
 | Zobrazovať meno overovateľa pri verdikte, alebo len rolu? (GDPR) | tím, metodika |
 | Fotky k sľubom: vlastné, z fotobanky, alebo žiadne? | UX |
