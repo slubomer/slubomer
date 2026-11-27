@@ -48,3 +48,7 @@ def require_role(*roles: UserRole) -> Callable[[User], User]:
 
 
 AdminUser = Annotated[User, Depends(require_role(UserRole.ADMIN))]
+
+# Editorial team: the verifier may read editorial data, only the editor changes it.
+EditorialUser = Annotated[User, Depends(require_role(UserRole.REDAKTOR, UserRole.OVEROVATEL))]
+EditorUser = Annotated[User, Depends(require_role(UserRole.REDAKTOR))]

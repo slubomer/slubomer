@@ -66,6 +66,30 @@ def record(
     )
 
 
+def apply_changes(
+    db: Session,
+    actor: User | None,
+    obj: Any,
+    entity: str,
+    values: dict[str, Any],
+    *,
+    reason: str | None = None,
+) -> bool:
+    """Set the given attributes on a row and log what really changed.
+
+    Returns False when nothing changed (then nothing is logged).
+    """
+    before = snapshot(obj)
+    for key, value in values.items():
+        setattr(obj, key, value)
+    db.flush()  # a changed relationship (e.g. category) fills its *_id column only on flush
+    old_values, new_values = changes(before, snapshot(obj))
+    if not new_values:
+        return False
+    record(db, actor, "update", entity, obj.id, before=old_values, after=new_values, reason=reason)
+    return True
+
+
 def search(
     db: Session,
     *,

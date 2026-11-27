@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.db import get_db
 from app.import_promises import import_promises
 from app.main import app
-from app.models import Base, Promise, Subject, Verdict
+from app.models import Base, Category, Promise, Subject, Verdict
 from app.models.enums import PromiseState
 
 RECORDS = [
@@ -80,6 +80,31 @@ def test_import_is_idempotent(factory):
 
         assert (result.created, result.skipped) == (0, 4)
         assert db.scalar(select(func.count(Promise.id))) == 3
+
+
+def test_import_creates_categories(factory):
+    records = [dict(r, kategoria="Doprava") for r in RECORDS]
+    records[1]["kategoria"] = "Zdravotníctvo"
+
+    with factory() as db:
+        import_promises(db, records)
+
+        assert {c.slug: c.label for c in db.scalars(select(Category))} == {
+            "doprava": "Doprava",
+            "zdravotnictvo": "Zdravotníctvo",
+        }
+        promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
+        assert promise.category.label == "Zdravotníctvo"
+        assert "zdravotnictvo" in promise.search_text
+
+
+def test_reimport_fills_missing_categories(factory):
+    with factory() as db:
+        import_promises(db, RECORDS)  # an older file without categories
+        result = import_promises(db, [dict(r, kategoria="Doprava") for r in RECORDS])
+
+        assert (result.created, result.categorized, result.skipped) == (0, 3, 1)
+        assert db.scalar(select(func.count(Promise.id)).where(Promise.category_id.is_(None))) == 0
 
 
 def test_imported_promises_are_drafts(factory):
