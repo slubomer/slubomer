@@ -27,6 +27,7 @@ class PromiseFilters:
     subject: str | None = None  # subject slug
     category: str | None = None  # category slug
     verdict: VerdictValue | None = None
+    verified: bool | None = None  # verified by a political scientist (not just AI)
     type: PromiseType | None = None
 
 
@@ -55,6 +56,9 @@ def _apply_filters(stmt: Select, f: PromiseFilters) -> Select:
         stmt = stmt.where(Category.slug == f.category)
     if f.verdict:
         stmt = stmt.where(Verdict.value == f.verdict)
+    if f.verified is not None:
+        reviewed = Verdict.reviewer_role.is_not(None)
+        stmt = stmt.where(reviewed if f.verified else Verdict.id.is_not(None) & ~reviewed)
     if f.type:
         stmt = stmt.where(Promise.type == f.type)
     if f.q and (needle := normalize(f.q)):

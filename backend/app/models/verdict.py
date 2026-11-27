@@ -22,7 +22,8 @@ class Verdict(Base):
     state: Mapped[VerdictState] = mapped_column(db_enum(VerdictState), index=True)
     confidence: Mapped[float | None]  # AI confidence 0–1
     ai_generated: Mapped[bool] = mapped_column(default=False)
-    # Role only (e.g. "politológ"), no names on the public web (GDPR).
+    # Who verified it, role only (e.g. "politológ"), no names on the public web (GDPR).
+    # Empty = published by AI and not verified by a person yet.
     reviewer_role: Mapped[str | None] = mapped_column(String(50))
     review_reason: Mapped[str | None] = mapped_column(Text)
 
@@ -30,6 +31,14 @@ class Verdict(Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     promise: Mapped["Promise"] = relationship(back_populates="verdicts")  # noqa: F821
+
+    @property
+    def verified(self) -> bool:
+        """Checked by a person ("overený politológom"), not only by AI.
+
+        A comment on the promise is not a verification, see verdict_service.verify().
+        """
+        return self.reviewer_role is not None
 
 
 class VerdictLocked(Conflict):
