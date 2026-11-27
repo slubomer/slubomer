@@ -23,6 +23,9 @@ services:
       # Inside Docker the database host is the service name "db".
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       DEBUG: ${DEBUG:-false}
+      # Local dev runs on http://, so the session cookie must not require HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     ports:
       - "8000:8000"
     depends_on:
@@ -31,7 +34,9 @@ services:
     # Mount the code and reload on change, so you don't rebuild after every edit.
     volumes:
       - ./backend:/app
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      - ./data:/data:ro
+    # Local dev also imports the promises from data/sluby.json and the glossary (safe to repeat).
+    command: sh -c "alembic upgrade head && python -m app.import_promises /data/sluby.json && python -m app.seed glossary && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 volumes:
   db-data:
