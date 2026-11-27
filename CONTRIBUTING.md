@@ -19,7 +19,7 @@ Formát: `typ/<číslo-issue>-kratky-popis`
 | `fix/` | oprava chyby | `fix/31-filter-strana` |
 | `docs/` | dokumentácia | `docs/8-readme` |
 | `data/` | zdroje, import, testovacie sady | `data/15-import-pvv` |
-| `ai/` | prompty, schémy, vyhodnotenie | `ai/20-prompt-extrakcia-v2` |
+| `ai/` | prompty, schémy, vyhodnotenie | `ai/20-prompt-dokazy-v2` |
 | `chore/` | nastavenie repozitára, CI, závislosti | `chore/5-ci` |
 
 Vetvy sú krátkodobé – merge do pár dní, potom sa zmažú.
@@ -32,7 +32,7 @@ Formát [Conventional Commits](https://www.conventionalcommits.org/), anglicky, 
 feat: add promise list filters
 fix: correct page number in citation
 docs: describe verdict levels
-test: add extraction tests against gold standard
+test: add verdict tests against gold standard
 chore: update dependencies
 ```
 
@@ -65,7 +65,7 @@ Malé commity, jedna logická zmena = jeden commit.
 ## 6. AI a prompty
 
 - Prompty sú v `ai/prompts/` ako súbory, nie natvrdo v kóde.
-- Každá zmena promptu alebo modelu = **nová verzia** (napr. `extract_promises_v3.md`) a **nový test presnosti**; výsledok ide do PR.
+- Každá zmena promptu alebo modelu = **nová verzia** (napr. `suggest_verdict_v3.md`) a **nový test presnosti**; výsledok ide do PR.
 - Prompty **neobsahujú názvy strán ani hodnotiace slová**. Jeden prompt pre všetky strany, žiadne výnimky v kóde.
 - Výstup AI je JSON podľa schémy, teplota 0.
 
