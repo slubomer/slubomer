@@ -68,6 +68,11 @@ class DocumentKind(StrEnum):
     INE = "ine"
 
 
+# Public label of a political scientist's work (comments, verified verdicts).
+# Only this role makes a promise "dovysvetlený" or a verdict "overený politológom".
+POLITICAL_SCIENTIST = "politológ"
+
+
 class UserRole(StrEnum):
     """Editorial roles. The public web needs no login."""
 

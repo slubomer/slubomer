@@ -11,7 +11,9 @@ Sľub má vždy jeden zo 4 stavov. V JSON súbore (`stav`), v databáze aj v API
 | `splnene` | Splnený | Sľub je splnený celý, alebo opozičná strana preukázateľne urobila, čo mohla |
 | `ciastocne` | Čiastočne splnený | Práca sa začala alebo je splnená len časť sľubu |
 | `porusene` | Porušený | Sľub zhodili poslanci strany, ktorá ho dala |
-| `nesplnene` | Nesplnený | Nenašiel sa žiadny dôkaz, že sa plnenie začalo |
+| `nesplnene` | Nesplnený | **Zatiaľ** nesplnený: nenašiel sa žiadny dôkaz, že sa plnenie začalo |
+
+`nesplnene` neznamená, že sľub už nemôže byť splnený. Znamená, že sa zatiaľ nenašiel žiadny dôkaz o jeho splnení. Keď dôkaz pribudne, stav sa pri ďalšom vyhodnotení zmení. Sľub bez dôkazu je preto `nesplnene`, nie „nedostatok informácií“. Hodnotu `nedostatok_informacii` AI používa len vo vnútri redakcie, keď sa nedá posúdiť ani to, či dôkaz existuje.
 
 Každý stav má zdôvodnenie (`zdovodnenie`, v databáze `explanation`) napísané jednoducho a istotu (`confidence`, 0 až 1). AI môže vo vnútri redakcie vrátiť aj `nedostatok_informacii`. Tá sa nikdy nepublikuje.
 

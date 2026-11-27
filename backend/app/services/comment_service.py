@@ -9,14 +9,14 @@ from datetime import UTC, datetime
 from sqlalchemy.orm import Session
 
 from app.models import Promise, PromiseComment, User
-from app.models.enums import UserRole
+from app.models.enums import POLITICAL_SCIENTIST, UserRole
 from app.schemas.admin import PromiseAdminDetail
 from app.services import audit, promise_admin_service
 from app.services.errors import Forbidden, NotFound
 
 # What the public web shows instead of the author's name (GDPR).
 PUBLIC_ROLE = {
-    UserRole.OVEROVATEL: "politológ",
+    UserRole.OVEROVATEL: POLITICAL_SCIENTIST,
     UserRole.ADMIN: "redakcia",
 }
 

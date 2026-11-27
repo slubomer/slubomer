@@ -58,6 +58,28 @@ def test_promise_shows_every_comment_and_is_explained(verifier, promise_id, empt
     ]
 
 
+def test_admin_comment_does_not_make_promise_explained(promise_id, empty_factory):
+    """Only a political scientist's comment counts as "dovysvetlené"."""
+    admin_user = make_user(empty_factory, "a@example.com", UserRole.ADMIN, totp=True)
+    admin = login("a@example.com", totp_code=pyotp.TOTP(admin_user.totp_secret).now())
+
+    created = admin.post(comments_url(promise_id), json={"text": "Poznámka redakcie."})
+
+    assert created.status_code == 201
+    shown = TestClient(app).get(PUBLIC).json()
+    assert shown["comments"][0]["author_role"] == "redakcia"
+    assert shown["explained"] is False
+    (item,) = TestClient(app).get("/api/v1/promises").json()["items"]
+    assert item["explained"] is False
+
+
+def test_blank_comment_is_refused(verifier, promise_id):
+    assert verifier.post(comments_url(promise_id), json={"text": "   "}).status_code == 422
+    saved = verifier.post(comments_url(promise_id), json={"text": "  Text  "}).json()
+    assert saved["comments"][0]["text"] == "Text"  # spaces around are cut off
+    assert TestClient(app).get(PUBLIC).json()["explained"] is True
+
+
 def test_author_edits_and_deletes_own_comment(verifier, promise_id, empty_factory):
     comment_id = verifier.post(comments_url(promise_id), json={"text": "Pôvodne"}).json()[
         "comments"

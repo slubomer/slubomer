@@ -81,7 +81,7 @@ Hodnoty verdiktu sú `splnene`, `ciastocne`, `porusene` a `nesplnene`, rovnaké 
 
 Verdikty z AI sa zverejňujú hneď, bez politológa (rozhodnutie z 25. 11. 2026). Verdikt má preto dva príznaky: `ai_generated` (text pochádza od AI, AI Act) a `verified` (verdikt **overil politológ**, pozri [Overenie verdiktu politológom](#overenie-verdiktu-politológom)). Zoznam sa dá filtrovať `verified=true` (overené politológom) alebo `verified=false` (len AI).
 
-Zoznam aj detail majú aj príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. **Komentár nie je overenie**: sľub môže mať komentár a verdikt pritom ostane neoverený (`verified: false`), a naopak. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
+Zoznam aj detail majú aj príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Komentár admina (rola „redakcia“) sa nepočíta. Komentár len z medzier API odmietne (422), medzery okolo textu sa orežú. **Komentár nie je overenie**: sľub môže mať komentár a verdikt pritom ostane neoverený (`verified: false`), a naopak. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
 
 ## Prihlasovanie a roly
 
