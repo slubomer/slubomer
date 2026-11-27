@@ -27,10 +27,22 @@ class DocumentOut(ApiModel):
     published_at: date | None
 
 
+class VoteOut(ApiModel):
+    """Vote in the National Council. Field names as in the imported JSON."""
+
+    faza: str  # e.g. finalne, prve_citanie
+    vysledok: str  # e.g. Návrh prešiel
+    strana_za: int  # the party's MPs who voted for it
+    clenov_strany: int  # MPs in the party's club
+    celkom_za: int
+    pritomnych: int
+
+
 class EvidenceOut(ApiModel):
     role: EvidenceRole
     page: int | None
-    quote: str
+    quote: str | None  # empty for votes and imported web links
+    vote: VoteOut | None
     ai_generated: bool
     document: DocumentOut
 

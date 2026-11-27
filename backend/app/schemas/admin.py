@@ -15,7 +15,7 @@ from app.models.enums import (
 )
 from app.schemas.catalog import CategoryOut, SubjectOut
 from app.schemas.common import ApiModel
-from app.schemas.promise import DocumentOut
+from app.schemas.promise import DocumentOut, VoteOut
 
 # A reason that goes to the audit log: short, but not empty.
 Reason = Annotated[str, Field(min_length=3, max_length=1000)]
@@ -39,7 +39,8 @@ class EvidenceAdminOut(ApiModel):
     id: int
     role: EvidenceRole
     page: int | None
-    quote: str
+    quote: str | None  # empty for votes and imported web links
+    vote: VoteOut | None
     ai_generated: bool
     document: DocumentOut
 

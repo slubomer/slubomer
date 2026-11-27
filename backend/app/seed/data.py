@@ -35,7 +35,7 @@ PROMISES = [
         "category": "skolstvo",
         "type": "konkretny",
         "verdict": (
-            "splneny",
+            "splnene",
             "Dôkazy potvrdzujú, že sa to naozaj stalo. Peniaze boli v štátnom rozpočte.",
         ),
     },
@@ -46,7 +46,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "zdravotnictvo",
         "type": "zakon",
-        "verdict": ("v_procese", "Návrh zákona je v parlamente, ale ešte nie je schválený."),
+        "verdict": ("ciastocne", "Návrh zákona je v parlamente, ale ešte nie je schválený."),
     },
     {
         "slug": "doprava",
@@ -55,7 +55,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "doprava",
         "type": "konkretny",
-        "verdict": ("v_procese", "Plán sa pripravuje, zatiaľ je hotová len jeho časť."),
+        "verdict": ("ciastocne", "Plán sa pripravuje, zatiaľ je hotová len jeho časť."),
     },
     {
         "slug": "sluzby",
@@ -64,7 +64,7 @@ PROMISES = [
         "subject": "subjekt-c",
         "category": "sprava",
         "type": "vagny",
-        "verdict": ("nesplneny", "Žiadne merateľné zlepšenie sa nepodarilo preukázať."),
+        "verdict": ("nesplnene", "Žiadne merateľné zlepšenie sa nepodarilo preukázať."),
     },
     {
         "slug": "obchvat",
@@ -74,10 +74,10 @@ PROMISES = [
         "category": "doprava",
         "type": "stavba",
         "verdict": (
-            "nesplneny",
+            "nesplnene",
             "Termín uplynul a stavba sa nezačala. Verejné obstarávanie zrušili.",
         ),
-        "history": [("v_procese", "Prebieha verejné obstarávanie na zhotoviteľa stavby.")],
+        "history": [("ciastocne", "Prebieha verejné obstarávanie na zhotoviteľa stavby.")],
     },
     {
         "slug": "ambulancie",
@@ -87,7 +87,7 @@ PROMISES = [
         "category": "zdravotnictvo",
         "type": "konkretny",
         "verdict": (
-            "nesplneny",
+            "nesplnene",
             "Ambulancie sa neotvorili. Rozhodujú o nich kraje, nie je to v kompetencii strany.",
         ),
     },
@@ -98,7 +98,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "skolstvo",
         "type": "zakon",
-        "verdict": ("splneny", "Zvýšenie schválila vláda a platí od januára."),
+        "verdict": ("splnene", "Zvýšenie schválila vláda a platí od januára."),
     },
     {
         "slug": "vlaky",
@@ -107,7 +107,7 @@ PROMISES = [
         "subject": "subjekt-c",
         "category": "doprava",
         "type": "konkretny",
-        "verdict": ("splneny", "Od decembra chodia vlaky v regiónoch každú hodinu."),
+        "verdict": ("splnene", "Od decembra chodia vlaky v regiónoch každú hodinu."),
     },
     {
         "slug": "cyklotrasy",
@@ -118,7 +118,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "doprava",
         "type": "stavba",
-        "verdict": ("v_procese", "Postavili zatiaľ asi 80 km, práce pokračujú."),
+        "verdict": ("ciastocne", "Postavili zatiaľ asi 80 km, práce pokračujú."),
     },
     {
         "slug": "skolky",
@@ -128,7 +128,7 @@ PROMISES = [
         "category": "skolstvo",
         "type": "konkretny",
         "verdict": (
-            "v_procese",
+            "ciastocne",
             "Pribudli nové miesta, ale peniaze v rozpočte zatiaľ nestačia pre všetky deti.",
         ),
     },
@@ -139,7 +139,7 @@ PROMISES = [
         "subject": "subjekt-b",
         "category": "sprava",
         "type": "konkretny",
-        "verdict": ("v_procese", "Online funguje zatiaľ asi tretina služieb."),
+        "verdict": ("ciastocne", "Online funguje zatiaľ asi tretina služieb."),
     },
     {
         "slug": "byrokracia",
@@ -148,7 +148,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "sprava",
         "type": "vagny",
-        "verdict": ("nesplneny", "Úrady fungujú rovnako ako predtým, sľúbená zmena neprišla."),
+        "verdict": ("nesplnene", "Úrady fungujú rovnako ako predtým, sľúbená zmena neprišla."),
     },
     {
         "slug": "cakacie-lehoty",
@@ -157,7 +157,7 @@ PROMISES = [
         "subject": "subjekt-b",
         "category": "zdravotnictvo",
         "type": "konkretny",
-        "verdict": ("splneny", "Čakanie na plánované operácie sa skrátilo na polovicu."),
+        "verdict": ("splnene", "Čakanie na plánované operácie sa skrátilo na polovicu."),
     },
     {
         "slug": "nemocnica",
@@ -166,7 +166,7 @@ PROMISES = [
         "subject": "subjekt-a",
         "category": "zdravotnictvo",
         "type": "stavba",
-        "verdict": ("v_procese", "Verejné obstarávanie na stavbu prebieha."),
+        "verdict": ("ciastocne", "Verejné obstarávanie na stavbu prebieha."),
     },
     {
         "slug": "ucebnice",
@@ -175,7 +175,7 @@ PROMISES = [
         "subject": "subjekt-b",
         "category": "skolstvo",
         "type": "zakon",
-        "verdict": ("splneny", "Parlament zákon schválil a učebnice sú zadarmo."),
+        "verdict": ("splnene", "Parlament zákon schválil a učebnice sú zadarmo."),
     },
     {
         "slug": "miestne-dane",
@@ -185,7 +185,7 @@ PROMISES = [
         "category": "sprava",
         "type": "zakon",
         "verdict": (
-            "nesplneny",
+            "nesplnene",
             "Dane sa neznížili. Rozhoduje o nich samospráva, nie parlament.",
         ),
     },
@@ -265,7 +265,7 @@ GLOSSARY = [
     {
         "name": "Verdikt",
         "short": "Výsledok overenia sľubu.",
-        "example": "Napríklad „Splnený“ alebo „V procese“.",
+        "example": "Napríklad „Splnený“ alebo „Čiastočne splnený“.",
         "wiki_url": _wiki("Verdikt"),
         "stems": ["verdikt"],
     },

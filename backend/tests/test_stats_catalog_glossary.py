@@ -5,7 +5,7 @@ def test_overview_counts_match_the_list(client):
     body = client.get("/api/v1/stats/overview").json()
 
     assert body["total"] == 16
-    assert body["by_verdict"] == {"splneny": 5, "nesplneny": 5, "v_procese": 6}
+    assert body["by_verdict"] == {"splnene": 5, "ciastocne": 6, "porusene": 0, "nesplnene": 5}
     assert body["unrated"] == 0  # every sample promise has a verdict
 
 

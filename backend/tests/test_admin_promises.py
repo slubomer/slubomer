@@ -173,7 +173,7 @@ def test_evidence_of_published_verdict_cannot_be_deleted(editor, empty_factory):
             Verdict(
                 promise_id=promise_id,
                 version=1,
-                value=VerdictValue.SPLNENY,
+                value=VerdictValue.SPLNENE,
                 explanation="Zákon bol prijatý.",
                 state=VerdictState.PUBLIKOVANY,
             )

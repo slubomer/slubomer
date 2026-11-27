@@ -6,9 +6,10 @@ from app.schemas.catalog import SubjectOut
 
 
 class VerdictCounts(BaseModel):
-    splneny: int = 0
-    nesplneny: int = 0
-    v_procese: int = 0
+    splnene: int = 0
+    ciastocne: int = 0
+    porusene: int = 0
+    nesplnene: int = 0
 
 
 class OverviewStats(BaseModel):
