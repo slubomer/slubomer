@@ -45,7 +45,9 @@ Musí existovať konkrétny krok štátu: prijatý zákon alebo uznesenie vlády
 
 ### Médiá a publikovanie
 
-Článok z médií (dôkaz typu `web`) je len tip, nie publikovaný dokument (pozri [CONTRIBUTING](../CONTRIBUTING.md)). Stav z importu je preto iba **návrh verdiktu**. Overovateľ ho pred publikovaním potvrdí publikovaným dokumentom, napríklad zákonom, uznesením, zmluvou alebo hlasovaním NR SR.
+Verdikt z AI sa zverejní hneď, s označením, že ho hodnotil AI. Môže stáť aj na článku z médií (dôkaz typu `web`), lebo pre mnohé stavby a opatrenia iný verejný zdroj nie je.
+
+Označenie **overený politológom** dostane verdikt, až keď ho politológ potvrdí publikovaným dokumentom, napríklad zákonom, uznesením, zmluvou alebo hlasovaním NR SR. Článok z médií na overenie nestačí (pozri [CONTRIBUTING](../CONTRIBUTING.md)). Výnimkou je `nesplnene`, ktorý hovorí, že sa dôkaz nenašiel. Komentár politológa k sľubu je od overenia oddelený: pridanie komentára verdikt neoverí.
 
 ## Kde sa pravidlá používajú
 

@@ -71,7 +71,7 @@ Malé commity, jedna logická zmena = jeden commit.
 
 ## 7. Dáta
 
-- Verdikt stojí **len na publikovanom dokumente** (zákon, uznesenie, rozpočet, zmluva). Médiá sú len tip.
+- Verdikt **overený politológom** stojí **len na publikovanom dokumente** (zákon, uznesenie, rozpočet, zmluva, hlasovanie). Médiá sú len tip. AI verdikt sa zverejní aj s dôkazom z médií, ale je jasne označený ako AI (pozri `docs/metodika-hodnotenia.md`).
 - Každý zdroj má URL, archivovanú kópiu a hash.
 - Veľké súbory (PDF, dumpy) nepatria do gitu – ukladajú sa mimo repozitára, v gite je len odkaz a hash.
 - Žiadne osobné údaje mimo verejného výkonu funkcie (GDPR).

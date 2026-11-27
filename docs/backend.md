@@ -79,7 +79,9 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 
 Hodnoty verdiktu sú `splnene`, `ciastocne`, `porusene` a `nesplnene`, rovnaké ako v importovanom JSON (pozri [metodika hodnotenia](metodika-hodnotenia.md)). Štatistiky vracajú počty pre všetky 4 hodnoty. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
-Zoznam aj detail majú príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Nie je to to isté ako verdikt schválený politológom. Verdikt schválený AI môže byť publikovaný aj bez politológa (rozhodnutie z 25. 11. 2026) a komentár k nemu môže pribudnúť neskôr. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
+Verdikty z AI sa zverejňujú hneď, bez politológa (rozhodnutie z 25. 11. 2026). Verdikt má preto dva príznaky: `ai_generated` (text pochádza od AI, AI Act) a `verified` (verdikt **overil politológ**, pozri [Overenie verdiktu politológom](#overenie-verdiktu-politológom)). Zoznam sa dá filtrovať `verified=true` (overené politológom) alebo `verified=false` (len AI).
+
+Zoznam aj detail majú aj príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. **Komentár nie je overenie**: sľub môže mať komentár a verdikt pritom ostane neoverený (`verified: false`), a naopak. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
 
 ## Prihlasovanie a roly
 
@@ -88,7 +90,7 @@ Verejné API je bez prihlásenia. Redakčné časti (`/api/v1/admin/...`) vyžad
 | Rola | Hodnota | Čo smie |
 | --- | --- | --- |
 | Redaktor | `redaktor` | sľuby, dôkazy a slovník (B-11) |
-| Overovateľ | `overovatel` | komentáre k sľubom, slovník, schvaľovanie verdiktov (B-12) |
+| Overovateľ | `overovatel` | komentáre k sľubom, slovník, overenie verdiktov (B-12) |
 | Admin | `admin` | všetko vrátane správy používateľov, **musí mať zapnutú 2FA** |
 
 ### Endpointy
@@ -138,7 +140,7 @@ Ku každej zmene dát musí byť dohľadateľné, kto ju urobil, kedy a prečo. 
 - Používatelia sa nemažú, len deaktivujú. Používateľa, ktorý je v audite, databáza zmazať nedovolí.
 - `GET /api/v1/admin/audit?entity=&entity_id=&actor_id=` vráti záznamy od najnovšieho. Smie ho čítať celá redakcia (redaktor, overovateľ, admin).
 
-Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA), import a všetky zmeny cez redakčné API (sľuby, dôkazy, komentáre, dokumenty, kategórie, slovník). Zmeny verdiktov a námietok pribudnú s B-06 a B-12.
+Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA), import a všetky zmeny cez redakčné API (sľuby, dôkazy, komentáre, dokumenty, kategórie, slovník) a overenie verdiktu politológom (`verify`). Námietky pribudnú s B-06.
 
 ### Verzie verdiktov
 
@@ -159,7 +161,7 @@ Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len 
 | `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
 | `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe. Sľub musí mať doslovnú citáciu, stranu a dokument, inak 422 |
 | `POST /api/v1/admin/promises/{id}/reject` | Zamietne sľub (napr. nie je to sľub, duplikát). Dôvod je povinný |
-| `POST /api/v1/admin/promises/import` | Import sľubov z JSON (formát `data/sluby.json`). Sľuby ako návrhy, stav ako návrh verdiktu. Chybný súbor vráti 422 a nič neuloží |
+| `POST /api/v1/admin/promises/import` | Import sľubov z JSON (formát `data/sluby.json`). Sľuby so zdrojom a AI verdikty sa hneď zverejnia. Chybný súbor vráti 422 a nič neuloží |
 | `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou. Importované dôkazy z hlasovaní a webu citát nemajú, hlasovanie má počty v `vote` |
 | `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite. Podklad (`podklad`) publikovaného verdiktu sa zmazať nedá (409) |
 | `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
@@ -175,6 +177,23 @@ Pravidlá:
 - Subjekt a kategória sa posielajú slugom (`"category": "doprava"`), dokument číslom `document_id`.
 - Pri zmene názvu, textu, kategórie alebo subjektu sa prepočíta text pre vyhľadávanie (`Promise.refresh_search_text()`).
 - Komentáre sú v tabuľke `promise_comment` a patria k sľubu, nie k verzii verdiktu. Dajú sa preto pridať aj k už publikovanému (zamknutému) verdiktu. V tabuľke je `author_id` (kvôli oprávneniu na úpravu) a verejná rola `author_role`.
+
+## Overenie verdiktu politológom
+
+AI verdikty sú verejné hneď po importe. Politológ (overovateľ) ich potom môže označiť ako **overené politológom**. Komentár k sľubu je samostatná vec a overenie nenahrádza.
+
+| Endpoint | Čo robí |
+| --- | --- |
+| `GET /api/v1/admin/verdicts` | Aktuálny verdikt každého sľubu (publikovaný alebo návrh), najstarší prvý. Filtre `verified` (`false` = fronta na overenie), `value`, `state`, `subject`. Smie celá redakcia |
+| `POST /api/v1/admin/verdicts/{id}/verify` | Overí verdikt. Telo `{"reason": "...", "value"?, "explanation"?}`. Dôvod je povinný, hodnotu a zdôvodnenie môže politológ zároveň opraviť. Smie overovateľ a admin |
+
+Pravidlá:
+
+- Overenie vytvorí **novú publikovanú verziu** s `reviewer_role` (napr. „politológ“, bez mena) a dôvodom v `review_reason`. Predošlá verzia (aj otvorený návrh) sa označí ako `nahradeny`, nič sa neprepisuje. Overiť sa dá aj návrh (`navrh`), tým sa zverejní.
+- `verified` je `true`, keď má verzia `reviewer_role`. Ak politológ zmení text alebo hodnotu, verzia už nie je `ai_generated` a nemá AI `confidence`.
+- Overiť sa dá len verdikt s dôkazom z **publikovaného dokumentu** (zákon, uznesenie, zmluva, hlasovanie NR SR). Článok z médií (`web`) nestačí, vtedy API vráti 422. Výnimkou je `nesplnene`, ktorý dôkaz nepotrebuje. `nedostatok_informacii` sa overiť ani publikovať nedá.
+- Už overený verdikt bez zmeny znova overiť nejde (409), rovnako nahradenú verziu.
+- Každé overenie je v audite (`action: "verify"`, `entity: "verdict"`) aj s dôvodom.
 
 ## Dáta
 
@@ -216,14 +235,15 @@ python -m app.import_promises ../data/sluby.json
 | `zdroj`, `program_url` | zdrojový dokument druhu `program` (`document`), jeden pre všetky sľuby z rovnakého programu |
 | `tema` | kategória (vytvorí sa pri prvom výskyte) |
 | `typ` | `type` (`konkretny`, `zakon`, `stavba`, `vagny`) |
-| `stav`, `zdovodnenie`, `confidence` | verzia verdiktu v stave `navrh`: `value`, `explanation`, `confidence` |
+| `stav`, `zdovodnenie`, `confidence` | publikovaný AI verdikt: `value`, `explanation`, `confidence` |
 | `vyhodnotenie` | dôkazy (`evidence`, rola `podklad`): hlasovanie ako dokument `hlasovanie` s počtami v `vote`, web ako dokument `web` |
 | `meta.generovane_ai` | príznak `ai_generated` pri sľube, dôkazoch aj verdikte (AI Act) |
 
 - Stavy sú tie isté 4 hodnoty ako v API: `splnene`, `ciastocne`, `porusene`, `nesplnene`. Podľa čoho sa určujú, popisuje [metodika hodnotenia](metodika-hodnotenia.md).
-- Sľuby vzniknú ako **návrhy** (`navrh`) a verdikt ako **návrh pre overovateľa**, takže na verejnom webe ešte nie sú. Sľub zverejní redaktor schválením (citácia, strana a dokument už sú vyplnené z importu), verdikt neskôr overovateľ (B-12).
+- Sľub s citáciou, stranou a programom je hneď **schválený** (`schvaleny`) a verdikt hneď **publikovaný** ako AI verdikt (`ai_generated`, `verified: false`). Politológ ho môže neskôr overiť (B-12). Sľub bez zdroja ostane návrh (`navrh`), kým ho redaktor nedoplní. Zamietnutý sľub import nezverejní.
+- Ako návrh (`navrh`) ostane aj verdikt, ktorý sa publikovať nesmie: `nedostatok_informacii` alebo verdikt bez dôkazu (okrem `nesplnene`, ktorý práve hovorí, že sa dôkaz nenašiel).
 - Chybný súbor sa nenahrá vôbec: API vráti 422 so zoznamom chybných polí (`loc` obsahuje poradie sľubu), príkaz v termináli vypíše chyby. Stav mimo 4 hodnôt, stav bez zdôvodnenia alebo hlasovanie bez počtov sú chyby.
-- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), dostane len to, čo je nové: vyplní sa prázdne pole (vyplnené sa nikdy neprepíše), pribudnú nové dôkazy (podľa URL) a ak sa zmenil stav alebo zdôvodnenie, vznikne nová verzia verdiktu. Starší nepreverený návrh sa označí ako `nahradeny`. Duplikáty v jednom súbore sa preskočia. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
+- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), dostane len to, čo je nové: vyplní sa prázdne pole (vyplnené sa nikdy neprepíše), pribudnú nové dôkazy (podľa URL) a ak sa zmenil stav alebo zdôvodnenie, vznikne nová publikovaná verzia verdiktu a stará sa označí ako `nahradeny`. Verdikt **overený politológom** import nikdy neprepíše: nový výsledok AI pribudne len ako návrh (`navrh`), ktorý politológ uvidí vo fronte. Duplikáty v jednom súbore sa preskočia. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
 - Výsledok vráti počty `created`, `updated`, `skipped`, `verdicts` a `evidence`. Celý import je jeden záznam v audite aj s `meta` súboru.
 
 Docker Compose spúšťa import pri štarte sám, spolu so slovníkom pojmov (`python -m app.seed glossary`).
