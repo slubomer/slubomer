@@ -77,7 +77,7 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 | `GET /api/v1/stats/subjects` | to isté pre každý subjekt |
 | `GET /api/v1/glossary`, `GET /api/v1/glossary/{slug}` | slovník pojmov v slovenskej abecede, s `stems` na zvýraznenie v texte |
 
-Hodnoty verdiktu sú `splneny`, `nesplneny` a `v_procese`. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
+Hodnoty verdiktu sú `splnene`, `ciastocne`, `porusene` a `nesplnene`, rovnaké ako v importovanom JSON (pozri [metodika hodnotenia](metodika-hodnotenia.md)). Štatistiky vracajú počty pre všetky 4 hodnoty. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
 Zoznam aj detail majú príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Nie je to to isté ako verdikt schválený politológom. Verdikt schválený AI môže byť publikovaný aj bez politológa (rozhodnutie z 25. 11. 2026) a komentár k nemu môže pribudnúť neskôr. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
 
@@ -159,7 +159,8 @@ Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len 
 | `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
 | `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe. Sľub musí mať doslovnú citáciu, stranu a dokument, inak 422 |
 | `POST /api/v1/admin/promises/{id}/reject` | Zamietne sľub (napr. nie je to sľub, duplikát). Dôvod je povinný |
-| `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou |
+| `POST /api/v1/admin/promises/import` | Import sľubov z JSON (formát `data/sluby.json`). Sľuby ako návrhy, stav ako návrh verdiktu. Chybný súbor vráti 422 a nič neuloží |
+| `POST /api/v1/admin/promises/{id}/evidence` | Pridá dôkaz: citát z dokumentu so stranou. Importované dôkazy z hlasovaní a webu citát nemajú, hlasovanie má počty v `vote` |
 | `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite. Podklad (`podklad`) publikovaného verdiktu sa zmazať nedá (409) |
 | `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
 | `GET/POST /api/v1/admin/categories`, `PATCH .../{id}` | Správa kategórií. Slug sa pri premenovaní nemení |
@@ -179,18 +180,51 @@ Pravidlá:
 
 ### Sľuby z volebných programov
 
-`data/sluby.json` obsahuje sľuby strán. Každý záznam má polia `strana`, `nazov`, `telo`, `datum`, `stav` a voliteľne `kategoria`. Import:
+`data/sluby.json` obsahuje sľuby strán aj s návrhom stavu a dôkazmi. Formát kontroluje Pydantic schéma v `app/schemas/promise_import.py`:
+
+```json
+{
+  "meta": {"schema_verzia": "2.0", "generovane_ai": true, "aktualizovane": "2026-11-26", "kroky": [...]},
+  "sluby": [
+    {
+      "strana": "...", "nazov": "...", "telo": "...",
+      "citacia": "...", "strana_programu": 4, "zdroj": "Názov programu", "program_url": null,
+      "tema": "Financie", "typ": "zakon",
+      "stav": "splnene", "zdovodnenie": "...", "confidence": 0.85,
+      "vyhodnotenie": [
+        {"typ": "hlasovanie", "zdroj": "https://www.nrsr.sk/...", "datum": "2024-02-13",
+         "hlasovanie": {"faza": "finalne", "vysledok": "Návrh prešiel", "strana_za": 39,
+                        "clenov_strany": 42, "celkom_za": 76, "pritomnych": 134}},
+        {"typ": "web", "zdroj": "https://...", "datum": "2025-10-22"}
+      ]
+    }
+  ]
+}
+```
+
+Povinné sú len `strana`, `nazov` a `telo`. Import cez terminál alebo cez API (`POST /api/v1/admin/promises/import`, telo požiadavky je obsah súboru, smie redaktor a admin):
 
 ```bash
 python -m app.import_promises ../data/sluby.json
 ```
 
-- Strana sa uloží ako `subject` (slug sa vytvorí z názvu), `nazov` ako `title` a `telo` ako `description`.
-- Sľuby sa importujú ako **návrhy** (`navrh`) a **bez verdiktu**, takže na verejnom webe ešte nie sú. Zverejní ich až redaktor, keď doplní doslovnú citáciu, stranu a dokument a sľub schváli.
-- Pole `stav` sa ignoruje. Formát súboru je zatiaľ len návrh a ešte sa bude meniť.
-- `kategoria` sa uloží ako kategória sľubu. Kategória sa vytvorí pri prvom výskyte, ďalšie záznamy s rovnakým názvom ju zdieľajú. Názov poľa je v konštante `CATEGORY_FIELD` v `app/import_promises.py`.
-- Typ a doslovná citácia so stranou ostanú prázdne, doplní ich redakcia.
-- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), preskočí, takisto duplikáty v súbore. Ak však nový súbor prinesie kategóriu a sľub ju ešte nemá, doplní mu ju. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
+| Pole v JSON | Kam sa uloží |
+| --- | --- |
+| `strana` | `subject` (slug z názvu, skratka z časti pred „ – “) |
+| `nazov`, `telo` | `title`, `description` |
+| `citacia`, `strana_programu` | `quote`, `page` |
+| `zdroj`, `program_url` | zdrojový dokument druhu `program` (`document`), jeden pre všetky sľuby z rovnakého programu |
+| `tema` | kategória (vytvorí sa pri prvom výskyte) |
+| `typ` | `type` (`konkretny`, `zakon`, `stavba`, `vagny`) |
+| `stav`, `zdovodnenie`, `confidence` | verzia verdiktu v stave `navrh`: `value`, `explanation`, `confidence` |
+| `vyhodnotenie` | dôkazy (`evidence`, rola `podklad`): hlasovanie ako dokument `hlasovanie` s počtami v `vote`, web ako dokument `web` |
+| `meta.generovane_ai` | príznak `ai_generated` pri sľube, dôkazoch aj verdikte (AI Act) |
+
+- Stavy sú tie isté 4 hodnoty ako v API: `splnene`, `ciastocne`, `porusene`, `nesplnene`. Podľa čoho sa určujú, popisuje [metodika hodnotenia](metodika-hodnotenia.md).
+- Sľuby vzniknú ako **návrhy** (`navrh`) a verdikt ako **návrh pre overovateľa**, takže na verejnom webe ešte nie sú. Sľub zverejní redaktor schválením (citácia, strana a dokument už sú vyplnené z importu), verdikt neskôr overovateľ (B-12).
+- Chybný súbor sa nenahrá vôbec: API vráti 422 so zoznamom chybných polí (`loc` obsahuje poradie sľubu), príkaz v termináli vypíše chyby. Stav mimo 4 hodnôt, stav bez zdôvodnenia alebo hlasovanie bez počtov sú chyby.
+- Import sa dá spustiť opakovane. Sľub, ktorý už v databáze je (rovnaká strana a rovnaký text), dostane len to, čo je nové: vyplní sa prázdne pole (vyplnené sa nikdy neprepíše), pribudnú nové dôkazy (podľa URL) a ak sa zmenil stav alebo zdôvodnenie, vznikne nová verzia verdiktu. Starší nepreverený návrh sa označí ako `nahradeny`. Duplikáty v jednom súbore sa preskočia. Stačí teda nahradiť `data/sluby.json` novou verziou a import spustiť znova.
+- Výsledok vráti počty `created`, `updated`, `skipped`, `verdicts` a `evidence`. Celý import je jeden záznam v audite aj s `meta` súboru.
 
 Docker Compose spúšťa import pri štarte sám, spolu so slovníkom pojmov (`python -m app.seed glossary`).
 
