@@ -12,7 +12,7 @@ import sys
 from app.core import security
 from app.core.db import SessionLocal
 from app.models.enums import UserRole
-from app.services import user_service
+from app.services import audit, user_service
 from app.services.errors import ServiceError
 
 
@@ -33,6 +33,7 @@ def main() -> None:
         # Admins must use 2FA, so it is enabled immediately.
         user.totp_secret = security.new_totp_secret()
         user.totp_enabled = True
+        audit.record(db, None, "enable_2fa", "app_user", user.id, after={"totp_enabled": True})
         db.commit()
         uri = security.totp_uri(user.totp_secret, user.email)
 

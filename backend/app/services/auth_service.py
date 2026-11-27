@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import settings
 from app.models import User, UserSession
+from app.services import audit
 from app.services.errors import ServiceError, TooManyAttempts, Unauthorized
 
 # One message for every login failure, so it doesn't reveal which part was wrong.
@@ -121,6 +122,7 @@ def confirm_totp(db: Session, user: User, code: str) -> None:
     if not security.verify_totp(user.totp_secret, code):
         raise ServiceError(INVALID_TOTP)
     user.totp_enabled = True
+    audit.record(db, user, "enable_2fa", "app_user", user.id, after={"totp_enabled": True})
     db.commit()
 
 
@@ -128,4 +130,5 @@ def change_password(db: Session, user: User, current: str, new: str) -> None:
     if not security.verify_password(user.password_hash, current):
         raise Unauthorized("Súčasné heslo nie je správne")
     user.password_hash = security.hash_password(new)
+    audit.record(db, user, "change_password", "app_user", user.id, after={"password_changed": True})
     end_all_sessions(db, user)  # also commits
