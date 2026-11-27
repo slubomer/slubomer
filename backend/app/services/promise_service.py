@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session, contains_eager, selectinload
 
 from app.core.text import normalize
 from app.models import Category, Evidence, Promise, PromiseComment, Subject, Verdict
-from app.models.enums import PromiseState, PromiseType, VerdictState, VerdictValue
+from app.models.enums import (
+    POLITICAL_SCIENTIST,
+    PromiseState,
+    PromiseType,
+    VerdictState,
+    VerdictValue,
+)
 from app.schemas.common import Page
 from app.schemas.promise import (
     CommentOut,
@@ -31,7 +37,15 @@ class PromiseFilters:
 
 
 # True when a political scientist commented on the promise ("dovysvetlené").
-_EXPLAINED = exists().where(PromiseComment.promise_id == Promise.id).label("explained")
+# An admin's comment (role "redakcia") does not count.
+_EXPLAINED = (
+    exists()
+    .where(
+        PromiseComment.promise_id == Promise.id,
+        PromiseComment.author_role == POLITICAL_SCIENTIST,
+    )
+    .label("explained")
+)
 
 
 def _public_select() -> Select:
@@ -128,7 +142,8 @@ def get_detail(db: Session, slug: str) -> PromiseDetail | None:
     published = [v for v in promise.verdicts if v.published_at is not None]
     current = next((v for v in published if v.state == VerdictState.PUBLIKOVANY), None)
 
-    item = _list_item(promise, current, explained=bool(promise.comments))
+    explained = any(c.author_role == POLITICAL_SCIENTIST for c in promise.comments)
+    item = _list_item(promise, current, explained=explained)
     return PromiseDetail(
         **item.model_dump(),
         description=promise.description,

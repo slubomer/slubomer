@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field, HttpUrl, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, HttpUrl, StringConstraints, TypeAdapter
 
 from app.models.enums import (
     DocumentKind,
@@ -135,7 +135,8 @@ class EvidenceCreate(BaseModel):
 class CommentWrite(BaseModel):
     """New text of a comment (used for both create and update)."""
 
-    text: str = Field(min_length=1, max_length=5000)
+    # Spaces around are cut off first, so a comment of only spaces is refused.
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
 
 
 # --- Documents --------------------------------------------------------------

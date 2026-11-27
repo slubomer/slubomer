@@ -79,7 +79,7 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 
 Hodnoty verdiktu sú `splneny`, `nesplneny` a `v_procese`. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
-Zoznam aj detail majú príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Nie je to to isté ako verdikt schválený politológom. Verdikt schválený AI môže byť publikovaný aj bez politológa (rozhodnutie z 25. 11. 2026) a komentár k nemu môže pribudnúť neskôr. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
+Zoznam aj detail majú príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Komentár admina (rola „redakcia“) sa nepočíta. Komentár len z medzier API odmietne (422), medzery okolo textu sa orežú. Nie je to to isté ako verdikt schválený politológom. Verdikt schválený AI môže byť publikovaný aj bez politológa (rozhodnutie z 25. 11. 2026) a komentár k nemu môže pribudnúť neskôr. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
 
 ## Prihlasovanie a roly
 
