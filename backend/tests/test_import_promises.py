@@ -1,4 +1,8 @@
-"""Import of real promises (format of data/sluby.json) into a fresh database."""
+"""Import of promises from JSON (format of data/sluby.json): service, API and real file."""
+
+import copy
+import json
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -6,44 +10,80 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.db import get_db
-from app.import_promises import import_promises
 from app.main import app
-from app.models import Base, Category, Promise, Subject, Verdict
-from app.models.enums import PromiseState
+from app.models import AuditLog, Base, Category, Document, Evidence, Promise, Subject, Verdict
+from app.models.enums import (
+    DocumentKind,
+    PromiseState,
+    PromiseType,
+    UserRole,
+    VerdictState,
+    VerdictValue,
+)
+from app.schemas.promise_import import PromiseImportFile
+from app.services.promise_import_service import import_file
+from tests.test_auth import login, make_user
 
-RECORDS = [
-    {
-        "strana": "Strana Jedna – demokrati",
-        "nazov": "Nové cyklotrasy",
-        "telo": "Vybudujeme nové cyklotrasy v regiónoch.",
-        "datum": None,
-        "stav": "nesplnene",
-    },
-    {
-        "strana": "Strana Jedna – demokrati",
-        "nazov": "Lacnejšie lieky",
-        "telo": "Znížime doplatky za lieky.",
-        "datum": None,
-        "stav": "nesplnene",
-    },
-    # Same text as above, different title: a duplicate, skipped.
-    {
-        "strana": "Strana Jedna – demokrati",
-        "nazov": "Nižšie doplatky",
-        "telo": "Znížime doplatky za lieky.",
-        "datum": None,
-        "stav": "nesplnene",
-    },
-    # Same title as the first one, other party: a separate promise with its own slug.
-    {
-        "strana": "Hnutie Dva",
-        "nazov": "Nové cyklotrasy",
-        "telo": "Postavíme 100 km cyklotrás.",
-        "datum": None,
-        "stav": "nesplnene",
-    },
-]
+DATA_FILE = Path(__file__).resolve().parents[2] / "data" / "sluby.json"
+VOTE_URL = "https://www.nrsr.sk/web/Default.aspx?sid=schodze/hlasovanie/hlasklub&ID=1"
+
+FILE = {
+    "meta": {"schema_verzia": "2.0", "generovane_ai": True, "aktualizovane": "2026-11-26"},
+    "sluby": [
+        {
+            "strana": "Strana Jedna – demokrati",
+            "nazov": "Nové cyklotrasy",
+            "telo": "Vybudujeme nové cyklotrasy v regiónoch.",
+            "citacia": "Vybudujeme cyklotrasy.",
+            "strana_programu": 4,
+            "zdroj": "Program Strany Jedna",
+            "program_url": None,
+            "tema": "Doprava",
+            "typ": "stavba",
+            "stav": "nesplnene",
+            "zdovodnenie": "Nenašiel sa žiadny dôkaz o začatí plnenia.",
+            "confidence": 0.4,
+            "vyhodnotenie": [],
+        },
+        {
+            "strana": "Strana Jedna – demokrati",
+            "nazov": "Lacnejšie lieky",
+            "telo": "Znížime doplatky za lieky.",
+            "citacia": "Znížime doplatky.",
+            "strana_programu": 7,
+            "zdroj": "Program Strany Jedna",
+            "tema": "Zdravotníctvo",
+            "typ": "zakon",
+            "stav": "splnene",
+            "zdovodnenie": "Zákon prešiel (Za 80 zo 140 prítomných).",
+            "confidence": 0.85,
+            "vyhodnotenie": [
+                {
+                    "typ": "hlasovanie",
+                    "zdroj": VOTE_URL,
+                    "datum": "2024-02-13",
+                    "hlasovanie": {
+                        "faza": "finalne",
+                        "vysledok": "Návrh prešiel",
+                        "strana_za": 20,
+                        "clenov_strany": 21,
+                        "celkom_za": 80,
+                        "pritomnych": 140,
+                    },
+                },
+                {"typ": "web", "zdroj": "https://www.teraz.sk/clanok", "datum": "2024-03-01"},
+            ],
+        },
+        # Same text as above, different title: a duplicate, skipped.
+        {
+            "strana": "Strana Jedna – demokrati",
+            "nazov": "Nižšie doplatky",
+            "telo": "Znížime doplatky za lieky.",
+        },
+        # Same title as the first one, other party: a separate promise with its own slug.
+        {"strana": "Hnutie Dva", "nazov": "Nové cyklotrasy", "telo": "Postavíme 100 km cyklotrás."},
+    ],
+}
 
 
 @pytest.fixture
@@ -55,13 +95,16 @@ def factory():
     return sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def test_import_creates_subjects_and_promises_without_verdict(factory):
+def run(db, data: dict = FILE):
+    return import_file(db, PromiseImportFile.model_validate(data), source="test")
+
+
+def test_import_fills_promise_fields_and_subjects(factory):
     with factory() as db:
-        result = import_promises(db, RECORDS)
+        result = run(db)
 
         assert (result.created, result.skipped) == (3, 1)
         subjects = {s.slug: s for s in db.scalars(select(Subject))}
-        assert set(subjects) == {"strana-jedna-demokrati", "hnutie-dva"}
         assert subjects["strana-jedna-demokrati"].short_name == "Strana Jedna"
         assert subjects["hnutie-dva"].short_name is None
         assert set(db.scalars(select(Promise.slug))) == {
@@ -69,54 +112,104 @@ def test_import_creates_subjects_and_promises_without_verdict(factory):
             "lacnejsie-lieky",
             "nove-cyklotrasy-hnutie-dva",
         }
-        # "stav" is only a placeholder: no verdicts are created.
-        assert db.scalar(select(func.count(Verdict.id))) == 0
+
+        promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
+        assert (promise.quote, promise.page, promise.type) == (
+            "Znížime doplatky.",
+            7,
+            PromiseType.ZAKON,
+        )
+        assert promise.state == PromiseState.NAVRH
+        assert promise.ai_generated is True
+        assert promise.category.label == "Zdravotníctvo"
+        assert promise.document.kind == DocumentKind.PROGRAM
+        assert promise.document.title == "Program Strany Jedna"
+        # Both promises of the party share one programme document.
+        assert db.scalar(select(func.count(Document.id)).where(Document.kind == "program")) == 1
+        assert {c.slug for c in db.scalars(select(Category))} == {"doprava", "zdravotnictvo"}
 
 
-def test_import_is_idempotent(factory):
+def test_import_creates_verdict_drafts_with_json_states(factory):
     with factory() as db:
-        import_promises(db, RECORDS)
-        result = import_promises(db, RECORDS)
+        run(db)
 
-        assert (result.created, result.skipped) == (0, 4)
+        verdicts = {v.promise.slug: v for v in db.scalars(select(Verdict))}
+        assert set(verdicts) == {"nove-cyklotrasy", "lacnejsie-lieky"}  # no "stav", no verdict
+        verdict = verdicts["lacnejsie-lieky"]
+        assert verdict.value == VerdictValue.SPLNENE
+        assert verdict.state == VerdictState.NAVRH  # waits for the verifier
+        assert (verdict.version, verdict.confidence, verdict.ai_generated) == (1, 0.85, True)
+
+
+def test_import_stores_votes_and_web_pages_as_evidence(factory):
+    with factory() as db:
+        result = run(db)
+
+        assert result.evidence == 2
+        rows = db.scalars(select(Evidence).order_by(Evidence.id)).all()
+        vote, web = rows
+        assert vote.document.kind == DocumentKind.HLASOVANIE
+        assert vote.document.url == VOTE_URL
+        assert vote.document.title == "Hlasovanie NR SR 13. 02. 2024"
+        assert vote.vote["strana_za"] == 20 and vote.quote is None
+        assert web.document.kind == DocumentKind.WEB
+        assert web.document.title == "teraz.sk" and web.vote is None
+
+
+def test_reimport_changes_nothing(factory):
+    with factory() as db:
+        run(db)
+        result = run(db)
+
+        assert (result.created, result.updated, result.skipped) == (0, 0, 4)
+        assert (result.verdicts, result.evidence) == (0, 0)
         assert db.scalar(select(func.count(Promise.id))) == 3
+        assert db.scalar(select(func.count(Verdict.id))) == 2
+        assert db.scalar(select(func.count(Evidence.id))) == 2
 
 
-def test_import_creates_categories(factory):
-    records = [dict(r, kategoria="Doprava") for r in RECORDS]
-    records[1]["kategoria"] = "Zdravotníctvo"
+def test_reimport_with_new_state_adds_verdict_version(factory):
+    newer = copy.deepcopy(FILE)
+    newer["sluby"][1]["stav"] = "ciastocne"
+    newer["sluby"][1]["zdovodnenie"] = "Splnená je len časť sľubu."
 
     with factory() as db:
-        import_promises(db, records)
+        run(db)
+        result = run(db, newer)
 
-        assert {c.slug: c.label for c in db.scalars(select(Category))} == {
-            "doprava": "Doprava",
-            "zdravotnictvo": "Zdravotníctvo",
-        }
+        assert (result.updated, result.verdicts) == (1, 1)
+        promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
+        versions = sorted(((v.version, v.value, v.state) for v in promise.verdicts), reverse=True)
+        assert versions == [
+            (2, VerdictValue.CIASTOCNE, VerdictState.NAVRH),
+            (1, VerdictValue.SPLNENE, VerdictState.NAHRADENY),
+        ]
+
+
+def test_reimport_fills_only_empty_fields(factory):
+    older = copy.deepcopy(FILE)
+    for record in older["sluby"]:
+        record.pop("tema", None)
+    changed = copy.deepcopy(FILE)
+    changed["sluby"][1]["citacia"] = "Iný text citácie."
+
+    with factory() as db:
+        run(db, older)
+        result = run(db, changed)
+
+        assert result.updated == 2  # both promises of the first party got a category
         promise = db.scalar(select(Promise).where(Promise.slug == "lacnejsie-lieky"))
         assert promise.category.label == "Zdravotníctvo"
-        assert "zdravotnictvo" in promise.search_text
+        assert promise.quote == "Znížime doplatky."  # a filled-in quote is never overwritten
 
 
-def test_reimport_fills_missing_categories(factory):
+def test_imported_promises_are_not_public(factory):
     with factory() as db:
-        import_promises(db, RECORDS)  # an older file without categories
-        result = import_promises(db, [dict(r, kategoria="Doprava") for r in RECORDS])
+        run(db)
 
-        assert (result.created, result.categorized, result.skipped) == (0, 3, 1)
-        assert db.scalar(select(func.count(Promise.id)).where(Promise.category_id.is_(None))) == 0
+    from tests.conftest import _use_database
 
-
-def test_imported_promises_are_drafts(factory):
-    """Without a quote and source they must not reach the public web."""
-    with factory() as db:
-        import_promises(db, RECORDS)
-
-    def override_get_db():
-        with factory() as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
+    _use_database(factory)
     try:
         client = TestClient(app)
         items = client.get("/api/v1/promises", params={"q": "cyklotrasy"}).json()["items"]
@@ -128,6 +221,72 @@ def test_imported_promises_are_drafts(factory):
     assert items == []
     assert detail.status_code == 404
     assert stats["total"] == 0
-    with factory() as db:
-        states = set(db.scalars(select(Promise.state)))
-    assert states == {PromiseState.NAVRH}
+
+
+# --- Editorial API ------------------------------------------------------------
+
+
+@pytest.fixture
+def editor(empty_factory) -> TestClient:
+    make_user(empty_factory, "r@example.com", UserRole.REDAKTOR)
+    return login("r@example.com")
+
+
+def test_api_import_and_audit(editor, empty_factory):
+    response = editor.post("/api/v1/admin/promises/import", json=FILE)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "created": 3,
+        "updated": 0,
+        "skipped": 1,
+        "verdicts": 2,
+        "evidence": 2,
+    }
+    listed = editor.get("/api/v1/admin/promises", params={"state": "navrh"}).json()
+    assert listed["total"] == 3
+    with empty_factory() as db:
+        entry = db.scalar(select(AuditLog).where(AuditLog.action == "import"))
+        assert entry.actor_id is not None
+        assert entry.after["meta"]["schema_verzia"] == "2.0"
+
+
+def test_api_invalid_file_saves_nothing(editor, empty_factory):
+    broken = copy.deepcopy(FILE)
+    broken["sluby"][0]["stav"] = "v_procese"  # not one of the four states
+    broken["sluby"][1]["vyhodnotenie"][0].pop("hlasovanie")
+    broken["sluby"][3]["zdovodnenie"] = None
+    broken["sluby"][3]["stav"] = "splnene"  # a state needs a reason
+
+    response = editor.post("/api/v1/admin/promises/import", json=broken)
+
+    assert response.status_code == 422
+    locations = [error["loc"][:3] for error in response.json()["detail"]]
+    assert ["body", "sluby", 0] in locations
+    assert ["body", "sluby", 1] in locations
+    assert ["body", "sluby", 3] in locations
+    with empty_factory() as db:
+        assert db.scalar(select(func.count(Promise.id))) == 0
+
+
+def test_api_import_needs_editor(empty_factory):
+    assert TestClient(app).post("/api/v1/admin/promises/import", json=FILE).status_code == 401
+    make_user(empty_factory, "o@example.com", UserRole.OVEROVATEL)
+    verifier = login("o@example.com")
+    assert verifier.post("/api/v1/admin/promises/import", json=FILE).status_code == 403
+
+
+# --- The real file ------------------------------------------------------------
+
+
+def test_data_file_is_valid_and_uses_four_states():
+    data = PromiseImportFile.model_validate(json.loads(DATA_FILE.read_text(encoding="utf-8")))
+
+    assert len(data.sluby) > 0
+    states = {record.stav for record in data.sluby}
+    assert states <= {
+        VerdictValue.SPLNENE,
+        VerdictValue.CIASTOCNE,
+        VerdictValue.PORUSENE,
+        VerdictValue.NESPLNENE,
+    }
