@@ -36,14 +36,28 @@ def create_term(db: Session, actor: User, values: dict[str, Any]) -> GlossaryTer
     return term
 
 
-def update_term(db: Session, actor: User, term_id: int, values: dict[str, Any]) -> GlossaryTerm:
-    """The slug stays, so links to the term keep working after a rename."""
+def _get(db: Session, term_id: int) -> GlossaryTerm:
     term = db.get(GlossaryTerm, term_id)
     if term is None:
         raise NotFound("Pojem sa nenašiel")
+    return term
+
+
+def update_term(db: Session, actor: User, term_id: int, values: dict[str, Any]) -> GlossaryTerm:
+    """The slug stays, so links to the term keep working after a rename."""
+    term = _get(db, term_id)
     for field in (*REQUIRED_FIELDS, "stems"):
         if field in values and values[field] is None:
             raise Invalid(f"Pole '{field}' nemôže byť prázdne")
     audit.apply_changes(db, actor, term, "glossary_term", values)
     db.commit()
     return term
+
+
+def delete_term(db: Session, actor: User, term_id: int, reason: str) -> None:
+    term = _get(db, term_id)
+    # The whole row goes to the log, so the term can be restored if needed.
+    before = audit.snapshot(term)
+    audit.record(db, actor, "delete", "glossary_term", term.id, before=before, reason=reason)
+    db.delete(term)
+    db.commit()

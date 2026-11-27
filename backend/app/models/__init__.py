@@ -10,6 +10,7 @@ from app.models.document import Document
 from app.models.evidence import Evidence
 from app.models.glossary_term import GlossaryTerm
 from app.models.promise import Promise
+from app.models.promise_comment import PromiseComment
 from app.models.subject import Subject
 from app.models.user import User, UserSession
 from app.models.verdict import Verdict
@@ -22,6 +23,7 @@ __all__ = [
     "Evidence",
     "GlossaryTerm",
     "Promise",
+    "PromiseComment",
     "Subject",
     "User",
     "UserSession",

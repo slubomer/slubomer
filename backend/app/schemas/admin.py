@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, Field, HttpUrl, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, HttpUrl, StringConstraints, TypeAdapter
 
 from app.models.enums import (
     DocumentKind,
@@ -60,6 +60,15 @@ class VerdictAdminOut(ApiModel):
     published_at: datetime | None
 
 
+class CommentAdminOut(ApiModel):
+    id: int
+    author_id: int | None  # None when the author's account was deleted
+    author_role: str
+    text: str
+    created_at: datetime
+    updated_at: datetime | None
+
+
 class PromiseAdminItem(ApiModel):
     id: int
     slug: str
@@ -79,6 +88,7 @@ class PromiseAdminDetail(PromiseAdminItem):
     document: DocumentOut | None
     evidence: list[EvidenceAdminOut]
     verdicts: list[VerdictAdminOut]  # newest first
+    comments: list[CommentAdminOut]  # oldest first
 
 
 class PromiseCreate(BaseModel):
@@ -120,6 +130,13 @@ class EvidenceCreate(BaseModel):
     role: EvidenceRole
     quote: str = Field(min_length=1)
     page: Page | None = None
+
+
+class CommentWrite(BaseModel):
+    """New text of a comment (used for both create and update)."""
+
+    # Spaces around are cut off first, so a comment of only spaces is refused.
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)]
 
 
 # --- Documents --------------------------------------------------------------

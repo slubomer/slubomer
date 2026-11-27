@@ -1,16 +1,18 @@
 """Editorial work on promises and their evidence.
 
-The editor (redaktor) makes changes, the verifier (overovatel) may only read.
+The editor (redaktor) makes changes, the verifier (overovatel) may only read,
+except for comments: those are written by the verifier (political scientist).
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import EditorialUser, EditorUser
+from app.api.deps import EditorialUser, EditorUser, VerifierUser
 from app.core.db import DbSession
 from app.models.enums import PromiseState
 from app.schemas.admin import (
+    CommentWrite,
     EvidenceCreate,
     PromiseAdminDetail,
     PromiseAdminItem,
@@ -19,6 +21,7 @@ from app.schemas.admin import (
     RejectRequest,
 )
 from app.schemas.common import Page
+from app.services import comment_service
 from app.services import promise_admin_service as service
 
 router = APIRouter(prefix="/admin/promises", tags=["admin: promises"])
@@ -101,3 +104,33 @@ def delete_evidence(
     reason: Annotated[str, Query(min_length=3, max_length=1000, description="Prečo sa maže")],
 ) -> PromiseAdminDetail:
     return service.delete_evidence(db, user, promise_id, evidence_id, reason)
+
+
+# --- Comments by the political scientist ---
+
+
+@router.post("/{promise_id}/comments", status_code=status.HTTP_201_CREATED)
+def add_comment(
+    promise_id: int, body: CommentWrite, user: VerifierUser, db: DbSession
+) -> PromiseAdminDetail:
+    """A promise may have many comments, all of them are public (role only, no name).
+
+    A comment makes the promise "dovysvetlený", it does not approve the verdict.
+    """
+    return comment_service.create(db, user, promise_id, body.text)
+
+
+@router.patch("/{promise_id}/comments/{comment_id}")
+def update_comment(
+    promise_id: int, comment_id: int, body: CommentWrite, user: VerifierUser, db: DbSession
+) -> PromiseAdminDetail:
+    """Only the author (or an admin) may change a comment."""
+    return comment_service.update(db, user, promise_id, comment_id, body.text)
+
+
+@router.delete("/{promise_id}/comments/{comment_id}")
+def delete_comment(
+    promise_id: int, comment_id: int, user: VerifierUser, db: DbSession
+) -> PromiseAdminDetail:
+    """Only the author (or an admin) may delete a comment."""
+    return comment_service.delete(db, user, promise_id, comment_id)

@@ -82,6 +82,7 @@ def get_detail(db: Session, promise_id: int) -> PromiseAdminDetail:
             selectinload(Promise.document),
             selectinload(Promise.evidence).selectinload(Evidence.document),
             selectinload(Promise.verdicts),
+            selectinload(Promise.comments),
         )
         .execution_options(populate_existing=True)  # fresh data right after a change
     )

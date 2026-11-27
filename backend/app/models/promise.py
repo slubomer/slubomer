@@ -47,6 +47,9 @@ class Promise(Base):
     verdicts: Mapped[list["Verdict"]] = relationship(  # noqa: F821
         back_populates="promise", order_by="Verdict.version.desc()"
     )
+    comments: Mapped[list["PromiseComment"]] = relationship(  # noqa: F821
+        back_populates="promise", order_by="PromiseComment.id"
+    )
 
     def refresh_search_text(self) -> None:
         """Call after changing the title, text, category or subject."""

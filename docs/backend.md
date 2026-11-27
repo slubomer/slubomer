@@ -71,7 +71,7 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 | Endpoint | Čo vráti |
 | --- | --- |
 | `GET /api/v1/promises` | schválené sľuby s publikovaným verdiktom; filtre `q`, `subject`, `category`, `verdict`, `type`, triedenie `sort` (`verified` / `title`), stránkovanie `page`, `page_size` |
-| `GET /api/v1/promises/{slug}` | detail: opis sľubu, doslovná citácia so stranou (ak je známa), dôkazy, aktuálny verdikt a história verzií |
+| `GET /api/v1/promises/{slug}` | detail: opis sľubu, doslovná citácia so stranou (ak je známa), dôkazy, aktuálny verdikt, história verzií a všetky komentáre politológa (`comments`) |
 | `GET /api/v1/subjects`, `GET /api/v1/categories` | zoznamy pre filtre s počtom sľubov |
 | `GET /api/v1/stats/overview` | počet sľubov, rozdelenie podľa verdiktu a počet nehodnotených (`unrated`) |
 | `GET /api/v1/stats/subjects` | to isté pre každý subjekt |
@@ -79,14 +79,16 @@ Všetko je pod `/api/v1`, popis a skúšanie na http://localhost:8000/docs.
 
 Hodnoty verdiktu sú `splneny`, `nesplneny` a `v_procese`. Zoznamy vracajú `{ "items": [...], "total", "page", "page_size" }`.
 
+Zoznam aj detail majú príznak `explained`: `true` znamená, že sľub „dovysvetlil politológ“, teda má aspoň jeden jeho komentár. Komentár admina (rola „redakcia“) sa nepočíta. Komentár len z medzier API odmietne (422), medzery okolo textu sa orežú. Nie je to to isté ako verdikt schválený politológom. Verdikt schválený AI môže byť publikovaný aj bez politológa (rozhodnutie z 25. 11. 2026) a komentár k nemu môže pribudnúť neskôr. Pri komentári sa zobrazuje len rola autora (`author_role`, napr. „politológ“), nikdy meno.
+
 ## Prihlasovanie a roly
 
 Verejné API je bez prihlásenia. Redakčné časti (`/api/v1/admin/...`) vyžadujú prihlásenie a rolu.
 
 | Rola | Hodnota | Čo smie |
 | --- | --- | --- |
-| Redaktor | `redaktor` | sľuby a dôkazy (B-11) |
-| Overovateľ | `overovatel` | schvaľovanie verdiktov (B-12) |
+| Redaktor | `redaktor` | sľuby, dôkazy a slovník (B-11) |
+| Overovateľ | `overovatel` | komentáre k sľubom, slovník, schvaľovanie verdiktov (B-12) |
 | Admin | `admin` | všetko vrátane správy používateľov, **musí mať zapnutú 2FA** |
 
 ### Endpointy
@@ -136,7 +138,7 @@ Ku každej zmene dát musí byť dohľadateľné, kto ju urobil, kedy a prečo. 
 - Používatelia sa nemažú, len deaktivujú. Používateľa, ktorý je v audite, databáza zmazať nedovolí.
 - `GET /api/v1/admin/audit?entity=&entity_id=&actor_id=` vráti záznamy od najnovšieho. Smie ho čítať celá redakcia (redaktor, overovateľ, admin).
 
-Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA), import a všetky zmeny cez redakčné API (sľuby, dôkazy, dokumenty, kategórie, slovník). Zmeny verdiktov a námietok pribudnú s B-06 a B-12.
+Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, zapnutie 2FA), import a všetky zmeny cez redakčné API (sľuby, dôkazy, komentáre, dokumenty, kategórie, slovník). Zmeny verdiktov a námietok pribudnú s B-06 a B-12.
 
 ### Verzie verdiktov
 
@@ -147,12 +149,12 @@ Zapisujú sa zmeny používateľov (vytvorenie, úprava, reset a zmena hesla, za
 
 ## Redakčné API
 
-Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len čítať, admin (s 2FA) môže všetko. Každá zmena ide do auditu.
+Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len čítať, okrem komentárov k sľubom a slovníka. Admin (s 2FA) môže všetko. Každá zmena ide do auditu.
 
 | Endpoint | Čo robí |
 | --- | --- |
 | `GET /api/v1/admin/promises` | Všetky sľuby vrátane návrhov a zamietnutých. Filtre `state`, `subject`, `category`, `without_category`, `q` |
-| `GET /api/v1/admin/promises/{id}` | Detail s dôkazmi a všetkými verziami verdiktu, aj návrhmi |
+| `GET /api/v1/admin/promises/{id}` | Detail s dôkazmi, komentármi a všetkými verziami verdiktu, aj návrhmi |
 | `POST /api/v1/admin/promises` | Nový sľub ručne. Začína ako `navrh`, verejne viditeľný je až po schválení |
 | `PATCH /api/v1/admin/promises/{id}` | Zmení len poslané polia, `null` pole vymaže. Slug (verejný odkaz) sa nemení |
 | `POST /api/v1/admin/promises/{id}/approve` | Schváli sľub, objaví sa na webe. Sľub musí mať doslovnú citáciu, stranu a dokument, inak 422 |
@@ -161,13 +163,17 @@ Redaktor tu dopĺňa a kontroluje sľuby. Overovateľ smie redakčné dáta len 
 | `DELETE /api/v1/admin/promises/{id}/evidence/{eid}?reason=` | Zmaže dôkaz. Dôvod je povinný, celý dôkaz ostane v audite. Podklad (`podklad`) publikovaného verdiktu sa zmazať nedá (409) |
 | `GET/POST /api/v1/admin/documents` | Evidencia dokumentov (druh, názov, URL, dátum). Nahrávanie súboru a hash prídu s B-10 |
 | `GET/POST /api/v1/admin/categories`, `PATCH .../{id}` | Správa kategórií. Slug sa pri premenovaní nemení |
-| `GET/POST /api/v1/admin/glossary`, `PATCH .../{id}` | Správa slovníka pojmov |
+| `POST /api/v1/admin/promises/{id}/comments` | Komentár politológa. Sľub ich môže mať viac, verejne sa zobrazia všetky. Len overovateľ a admin |
+| `PATCH/DELETE /api/v1/admin/promises/{id}/comments/{cid}` | Úprava alebo zmazanie komentára. Len jeho autor alebo admin, zmazaný text ostane v audite |
+| `GET/POST /api/v1/admin/glossary`, `PATCH .../{id}` | Správa slovníka pojmov. Smie redaktor, overovateľ aj admin |
+| `DELETE /api/v1/admin/glossary/{id}?reason=` | Zmaže pojem. Dôvod je povinný, celý pojem ostane v audite |
 
 Pravidlá:
 
 - Doslovná citácia (`quote`) a strana (`page`) sú dôkazom toho, čo bolo sľúbené. Prvýkrát sa vyplnia voľne, ich neskoršia zmena vyžaduje `reason`, inak API vráti 422.
 - Subjekt a kategória sa posielajú slugom (`"category": "doprava"`), dokument číslom `document_id`.
 - Pri zmene názvu, textu, kategórie alebo subjektu sa prepočíta text pre vyhľadávanie (`Promise.refresh_search_text()`).
+- Komentáre sú v tabuľke `promise_comment` a patria k sľubu, nie k verzii verdiktu. Dajú sa preto pridať aj k už publikovanému (zamknutému) verdiktu. V tabuľke je `author_id` (kvôli oprávneniu na úpravu) a verejná rola `author_role`.
 
 ## Dáta
 

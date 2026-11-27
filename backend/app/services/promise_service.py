@@ -3,14 +3,21 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, exists, func, select
 from sqlalchemy.orm import Session, contains_eager, selectinload
 
 from app.core.text import normalize
-from app.models import Category, Evidence, Promise, Subject, Verdict
-from app.models.enums import PromiseState, PromiseType, VerdictState, VerdictValue
+from app.models import Category, Evidence, Promise, PromiseComment, Subject, Verdict
+from app.models.enums import (
+    POLITICAL_SCIENTIST,
+    PromiseState,
+    PromiseType,
+    VerdictState,
+    VerdictValue,
+)
 from app.schemas.common import Page
 from app.schemas.promise import (
+    CommentOut,
     PromiseDetail,
     PromiseListItem,
     VerdictShort,
@@ -29,10 +36,22 @@ class PromiseFilters:
     type: PromiseType | None = None
 
 
+# True when a political scientist commented on the promise ("dovysvetlené").
+# An admin's comment (role "redakcia") does not count.
+_EXPLAINED = (
+    exists()
+    .where(
+        PromiseComment.promise_id == Promise.id,
+        PromiseComment.author_role == POLITICAL_SCIENTIST,
+    )
+    .label("explained")
+)
+
+
 def _public_select() -> Select:
-    """Approved promises joined with their published verdict (if they have one)."""
+    """Approved promises with their published verdict (if any) and the explained flag."""
     return (
-        select(Promise, Verdict)
+        select(Promise, Verdict, _EXPLAINED)
         .join(Promise.subject)
         .outerjoin(Promise.category)  # promises without a category stay in the list
         .outerjoin(
@@ -57,7 +76,7 @@ def _apply_filters(stmt: Select, f: PromiseFilters) -> Select:
     return stmt
 
 
-def _list_item(promise: Promise, verdict: Verdict | None) -> PromiseListItem:
+def _list_item(promise: Promise, verdict: Verdict | None, explained: bool) -> PromiseListItem:
     return PromiseListItem(
         slug=promise.slug,
         title=promise.title,
@@ -65,6 +84,7 @@ def _list_item(promise: Promise, verdict: Verdict | None) -> PromiseListItem:
         subject=promise.subject,
         category=promise.category,
         verdict=VerdictShort.model_validate(verdict) if verdict else None,
+        explained=explained,
     )
 
 
@@ -94,7 +114,7 @@ def search(
     rows = db.execute(stmt).all()
 
     return Page(
-        items=[_list_item(p, v) for p, v in rows],
+        items=[_list_item(p, v, explained) for p, v, explained in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -112,6 +132,7 @@ def get_detail(db: Session, slug: str) -> PromiseDetail | None:
             selectinload(Promise.document),
             selectinload(Promise.evidence).selectinload(Evidence.document),
             selectinload(Promise.verdicts),
+            selectinload(Promise.comments),
         )
     )
     if promise is None:
@@ -121,7 +142,8 @@ def get_detail(db: Session, slug: str) -> PromiseDetail | None:
     published = [v for v in promise.verdicts if v.published_at is not None]
     current = next((v for v in published if v.state == VerdictState.PUBLIKOVANY), None)
 
-    item = _list_item(promise, current)
+    explained = any(c.author_role == POLITICAL_SCIENTIST for c in promise.comments)
+    item = _list_item(promise, current, explained=explained)
     return PromiseDetail(
         **item.model_dump(),
         description=promise.description,
@@ -131,4 +153,5 @@ def get_detail(db: Session, slug: str) -> PromiseDetail | None:
         document=promise.document,
         evidence=promise.evidence,
         history=[VerdictVersion.model_validate(v) for v in published],
+        comments=[CommentOut.model_validate(c) for c in promise.comments],
     )
