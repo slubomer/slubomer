@@ -9,6 +9,7 @@ from app.api.routes import (
     admin_catalog,
     admin_promises,
     admin_users,
+    admin_verdicts,
     auth,
     catalog,
     glossary,
@@ -52,4 +53,5 @@ api_v1.include_router(admin_users.router)
 api_v1.include_router(admin_audit.router)
 api_v1.include_router(admin_promises.router)
 api_v1.include_router(admin_catalog.router)
+api_v1.include_router(admin_verdicts.router)
 app.include_router(api_v1)

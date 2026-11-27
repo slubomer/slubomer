@@ -227,16 +227,19 @@ Ide o dokumenty, z ktorých sa berú dôkazy (zákony, uznesenia, rozpočty, zml
 
 #### B-12 Overovanie verdiktov politológom (F-06)
 
-- `GET /api/v1/admin/verdicts?state=navrh`
-- `POST /api/v1/admin/verdicts/{id}/approve`, `.../edit`, `.../return` (dôvod je vždy povinný)
+AI verdikty sa zverejňujú hneď (rozhodnutie z 25. 11. 2026). Politológ ich potom môže označiť ako **overené politológom**. Pridanie komentára (príznak `explained`) nie je overenie.
 
-1. Schválenie publikuje verdikt, predošlú verziu označí ako nahradenú a nastaví `published_at`.
-2. Úprava vytvorí novú verziu s hodnotou a vysvetlením od overovateľa a odkazom na pôvodný návrh AI.
-3. Vrátenie pošle sľub späť redaktorovi alebo na nové hľadanie dôkazov.
-4. Publikovať sa dá len verdikt, ktorý má aspoň jeden dôkaz z publikovaného dokumentu. Výnimkou je `nesplnene`, ktorého zdôvodnenie hovorí, že sa dôkaz o začatí plnenia nenašiel. Článok z médií (dôkaz `web`) nestačí, overovateľ ho nahradí publikovaným dokumentom (pozri [metodika hodnotenia](metodika-hodnotenia.md#médiá-a-publikovanie)).
-5. Testy: bez dôvodu to neprejde, `nedostatok_informacii` sa nedá publikovať, história ostane celá.
+- `GET /api/v1/admin/verdicts?verified=false&sort=confidence` (fronta na overenie, najmenej isté prvé; filter `max_confidence`)
+- `POST /api/v1/admin/verdicts/{id}/verify` (dôvod je povinný, hodnotu a zdôvodnenie môže politológ opraviť; smie len overovateľ, nie admin)
 
-**Hotovo, keď** overovateľ vie schváliť, upraviť aj vrátiť verdikt a na verejnom webe sa ukáže až schválená verzia.
+1. Overenie vytvorí novú publikovanú verziu s rolou overovateľa (`reviewer_role`) a dôvodom. Predošlú verziu označí ako nahradenú a nastaví `published_at`.
+2. Ak politológ zmení hodnotu alebo text, nová verzia už nie je označená ako AI.
+3. Overiť sa dá len verdikt s dôkazom z publikovaného dokumentu (zákon, uznesenie, zmluva, hlasovanie). Výnimkou je `nesplnene`, ktorého zdôvodnenie hovorí, že sa dôkaz o začatí plnenia nenašiel. Článok z médií (dôkaz `web`) nestačí (pozri [metodika hodnotenia](metodika-hodnotenia.md#médiá-a-publikovanie)).
+4. Verejné API má pri verdikte príznaky `ai_generated` a `verified`, zoznam sa dá filtrovať podľa `verified`.
+5. Opakovaný import AI neprepíše overený verdikt, pridá len návrh.
+6. Testy: bez dôvodu to neprejde, `nedostatok_informacii` sa nedá overiť, článok nestačí, komentár nenastaví `verified`, história ostane celá.
+
+**Hotovo, keď** politológ vie overiť (aj opraviť) verdikt a verejný detail ukáže „overený politológom“ oddelene od komentárov.
 
 ### Fáza 4: AI pipeline (šprinty 4–6, spolu s Richardom)
 
@@ -249,15 +252,15 @@ Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Fo
 - `POST /api/v1/admin/promises/import` (redaktor nahrá JSON súbor)
 
 1. Kontrola formátu podľa Pydantic schémy. Pri chybe API vráti 422 so zoznamom chybných záznamov a nič neuloží.
-2. Sľuby vzniknú ako návrhy (`navrh`). Opakovaný import duplikáty preskočí, rovnako ako príkaz v termináli. Existujúcemu sľubu doplní len prázdne polia a nové dôkazy.
+2. Sľub s citáciou, stranou a programom sa hneď zverejní (`schvaleny`), bez zdroja ostane návrh (`navrh`). Opakovaný import duplikáty preskočí, rovnako ako príkaz v termináli. Existujúcemu sľubu doplní len prázdne polia a nové dôkazy.
 3. Import vyplní doslovnú citáciu, stranu a zdrojový program (dokument založí alebo nájde), tému ako kategóriu a typ.
-4. `stav` a `zdovodnenie` sa uložia ako verzia verdiktu v stave `navrh` pre overovateľa. Hodnoty sú 4 stavy z [metodiky hodnotenia](metodika-hodnotenia.md). Zmenený stav pri opakovanom importe pridá novú verziu.
+4. `stav` a `zdovodnenie` sa uložia ako publikovaný AI verdikt, ktorý politológ môže overiť (B-12). Hodnoty sú 4 stavy z [metodiky hodnotenia](metodika-hodnotenia.md). Zmenený stav pri opakovanom importe pridá novú verziu, verdikt overený politológom však neprepíše.
 5. `vyhodnotenie` sa uloží ako dôkazy: hlasovanie (dokument `hlasovanie`, počty v `vote`) a web (dokument `web`, len tip).
 6. Výsledok: počet nových, aktualizovaných a preskočených sľubov, nových verdiktov a dôkazov. Import ide do auditu (B-09).
 7. Príkaz v termináli a endpoint používajú tú istú službu (`app/services/promise_import_service.py`).
 8. Testy: platný súbor, chybný súbor, opakovaný import, nový stav, oprávnenia a platnosť skutočného `data/sluby.json`.
 
-**Hotovo, keď** redaktor nahrá JSON cez API a sľuby sa objavia ako návrhy v redakčnom zozname.
+**Hotovo, keď** redaktor nahrá JSON cez API a sľuby so zdrojom sa objavia na webe s AI verdiktom.
 
 #### B-14 AI dôkazy a návrh verdiktu (F-05)
 
@@ -265,7 +268,7 @@ Sľuby sa nahrávajú ako JSON, nie z PDF (rozhodnutie tímu z 25. 11. 2026). Fo
 2. Embeddingy textu dokumentov do `document_chunk` (pgvector).
 3. Hľadanie kandidátov na dôkaz: najprv vektorové a fulltextové hľadanie v našich dokumentoch, potom AI vyberie relevantné úryvky.
 4. Návrh verdiktu: AI dostane sľub a dôkazy a vráti hodnotu (`splnene`, `ciastocne`, `porusene`, `nesplnene`), krátke vysvetlenie, citáciu a istotu. Stav určí podľa [metodiky hodnotenia](metodika-hodnotenia.md). Môže vrátiť aj `nedostatok_informacii`.
-5. Výsledok je `verdict` so stavom `navrh`. Odtiaľ ide k overovateľovi (B-12).
+5. Výsledok sa publikuje ako AI verdikt podľa rovnakých pravidiel ako import (`verdict_service.publish_problem`). Politológ ho môže overiť (B-12).
 6. Testy s falošným LLM klientom: dôkaz bez citácie sa neuloží, výstup mimo schémy skončí chybou v `ai_run`.
 
 **Hotovo, keď** pre schválený sľub vznikne návrh verdiktu s aspoň jedným citovaným dôkazom.

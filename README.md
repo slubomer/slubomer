@@ -2,7 +2,7 @@
 
 Open-source projekt, ktorý sleduje plnenie politických sľubov na Slovensku.
 
-Každý verdikt stojí len na publikovanom dokumente: zákone, uznesení, rozpočte alebo zmluve. Médiá slúžia len ako tip. Ku každému zdroju evidujeme URL, archivovanú kópiu a hash.
+Verdikty najprv pripraví AI a sú hneď verejné s označením AI. Politológ ich potom môže overiť. Verdikt overený politológom stojí len na publikovanom dokumente: zákone, uznesení, rozpočte, zmluve alebo hlasovaní. Médiá slúžia len ako tip. Ku každému zdroju evidujeme URL, archivovanú kópiu a hash.
 
 ## Stav
 

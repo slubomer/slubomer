@@ -21,13 +21,18 @@ def list_promises(
     subject: Annotated[str | None, Query(description="Slug subjektu")] = None,
     category: Annotated[str | None, Query(description="Slug kategórie")] = None,
     verdict: VerdictValue | None = None,
+    verified: Annotated[
+        bool | None, Query(description="true = overené politológom, false = len AI")
+    ] = None,
     type: PromiseType | None = None,
     sort: SortOption = "verified",
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> Page[PromiseListItem]:
     """Approved promises with their published verdict."""
-    filters = PromiseFilters(q=q, subject=subject, category=category, verdict=verdict, type=type)
+    filters = PromiseFilters(
+        q=q, subject=subject, category=category, verdict=verdict, verified=verified, type=type
+    )
     return promise_service.search(db, filters, page=page, page_size=page_size, sort=sort)
 
 

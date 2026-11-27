@@ -11,12 +11,14 @@ class VerdictShort(ApiModel):
     value: VerdictValue
     explanation: str
     published_at: datetime | None
+    ai_generated: bool  # AI Act: the verdict text comes from AI
+    # Verified by a political scientist. A comment alone ("explained") is not a verification.
+    verified: bool
 
 
 class VerdictVersion(VerdictShort):
     version: int
-    reviewer_role: str | None
-    ai_generated: bool
+    reviewer_role: str | None  # who verified it, role only (GDPR)
 
 
 class DocumentOut(ApiModel):

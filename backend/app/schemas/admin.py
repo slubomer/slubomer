@@ -55,6 +55,7 @@ class VerdictAdminOut(ApiModel):
     state: VerdictState
     confidence: float | None
     ai_generated: bool
+    verified: bool  # verified by a political scientist
     reviewer_role: str | None
     review_reason: str | None
     created_at: datetime
