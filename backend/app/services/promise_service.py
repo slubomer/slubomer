@@ -71,8 +71,10 @@ def _apply_filters(stmt: Select, f: PromiseFilters) -> Select:
     if f.verdict:
         stmt = stmt.where(Verdict.value == f.verdict)
     if f.verified is not None:
-        reviewed = Verdict.reviewer_role.is_not(None)
-        stmt = stmt.where(reviewed if f.verified else Verdict.id.is_not(None) & ~reviewed)
+        # "false" means a published verdict that only AI rated, not "no verdict".
+        stmt = stmt.where(
+            Verdict.verified if f.verified else Verdict.id.is_not(None) & ~Verdict.verified
+        )
     if f.type:
         stmt = stmt.where(Promise.type == f.type)
     if f.q and (needle := normalize(f.q)):

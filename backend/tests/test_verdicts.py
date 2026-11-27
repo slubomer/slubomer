@@ -2,6 +2,7 @@
 
 import copy
 
+import pyotp
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -160,6 +161,30 @@ def test_only_political_scientist_verifies(imported, empty_factory):
     anonymous = TestClient(app)
     assert anonymous.post(f"{API}/{verdict_id}/verify", json={"reason": "x"}).status_code == 401
     assert anonymous.get(API).status_code == 401
+
+
+def test_admin_cannot_verify(imported, empty_factory):
+    """Otherwise the web would say "overený politológom" without a political scientist."""
+    imported()
+    admin_user = make_user(empty_factory, "a@example.com", UserRole.ADMIN, totp=True)
+    admin = login("a@example.com", totp_code=pyotp.TOTP(admin_user.totp_secret).now())
+    verdict_id = admin.get(API).json()["items"][0]["id"]
+
+    response = admin.post(f"{API}/{verdict_id}/verify", json={"reason": "Sedí."})
+
+    assert response.status_code == 403
+    assert admin.get(API, params={"verified": "true"}).json()["total"] == 0
+
+
+def test_queue_puts_least_certain_first(imported, verifier):
+    imported()  # "nesplnene" has confidence 0.4, "splnene" 0.85
+
+    by_confidence = verifier.get(API, params={"sort": "confidence"}).json()["items"]
+    doubtful = verifier.get(API, params={"max_confidence": 0.5}).json()["items"]
+
+    assert [v["confidence"] for v in by_confidence] == [0.4, 0.85]
+    assert [v["promise"]["slug"] for v in doubtful] == ["nove-cyklotrasy"]
+    assert verifier.get(API, params={"max_confidence": 2}).status_code == 422
 
 
 def test_comment_is_not_verification(imported, verifier, empty_factory):

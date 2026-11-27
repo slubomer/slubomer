@@ -229,8 +229,8 @@ Ide o dokumenty, z ktorých sa berú dôkazy (zákony, uznesenia, rozpočty, zml
 
 AI verdikty sa zverejňujú hneď (rozhodnutie z 25. 11. 2026). Politológ ich potom môže označiť ako **overené politológom**. Pridanie komentára (príznak `explained`) nie je overenie.
 
-- `GET /api/v1/admin/verdicts?verified=false` (fronta na overenie)
-- `POST /api/v1/admin/verdicts/{id}/verify` (dôvod je povinný, hodnotu a zdôvodnenie môže politológ opraviť)
+- `GET /api/v1/admin/verdicts?verified=false&sort=confidence` (fronta na overenie, najmenej isté prvé; filter `max_confidence`)
+- `POST /api/v1/admin/verdicts/{id}/verify` (dôvod je povinný, hodnotu a zdôvodnenie môže politológ opraviť; smie len overovateľ, nie admin)
 
 1. Overenie vytvorí novú publikovanú verziu s rolou overovateľa (`reviewer_role`) a dôvodom. Predošlú verziu označí ako nahradenú a nastaví `published_at`.
 2. Ak politológ zmení hodnotu alebo text, nová verzia už nie je označená ako AI.

@@ -8,23 +8,25 @@ A comment alone is not a verification.
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from typing import Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Evidence, Promise, Subject, User, Verdict
 from app.models.enums import (
+    POLITICAL_SCIENTIST,
     PUBLIC_VERDICT_VALUES,
     DocumentKind,
     EvidenceRole,
+    UserRole,
     VerdictState,
     VerdictValue,
 )
 from app.schemas.common import Page
 from app.schemas.verdict import VerdictQueueItem
 from app.services import audit
-from app.services.comment_service import PUBLIC_ROLE
-from app.services.errors import Conflict, Invalid, NotFound
+from app.services.errors import Conflict, Forbidden, Invalid, NotFound
 
 # Only these versions can be verified: the public one, or a draft waiting for review.
 CURRENT_STATES = (VerdictState.PUBLIKOVANY, VerdictState.NAVRH)
@@ -69,6 +71,13 @@ def verify_problem(value: VerdictValue, evidence: Iterable[Evidence]) -> str | N
 
 # --- Reading ----------------------------------------------------------------
 
+QueueSort = Literal["oldest", "confidence"]
+# The id at the end keeps pages stable when values repeat.
+_QUEUE_ORDER = {
+    "oldest": (Verdict.id,),
+    "confidence": (Verdict.confidence.asc().nulls_last(), Verdict.id),
+}
+
 
 def queue(
     db: Session,
@@ -77,14 +86,21 @@ def queue(
     value: VerdictValue | None = None,
     state: VerdictState | None = None,
     subject: str | None = None,
+    max_confidence: float | None = None,
+    sort: QueueSort = "oldest",
     page: int = 1,
     page_size: int = 50,
 ) -> Page[VerdictQueueItem]:
-    """Current verdicts (published or draft) for the political scientist, oldest first."""
+    """Current verdicts (published or draft) for the political scientist.
+
+    sort="confidence" puts the least certain AI verdicts first, so the political
+    scientist can check the doubtful ones before the rest.
+    """
     stmt = select(Verdict).join(Verdict.promise).where(Verdict.state.in_(CURRENT_STATES))
     if verified is not None:
-        reviewed = Verdict.reviewer_role.is_not(None)
-        stmt = stmt.where(reviewed if verified else ~reviewed)
+        stmt = stmt.where(Verdict.verified if verified else ~Verdict.verified)
+    if max_confidence is not None:
+        stmt = stmt.where(Verdict.confidence <= max_confidence)
     if value:
         stmt = stmt.where(Verdict.value == value)
     if state:
@@ -95,7 +111,7 @@ def queue(
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(
         stmt.options(selectinload(Verdict.promise).selectinload(Promise.subject))
-        .order_by(Verdict.id)
+        .order_by(*_QUEUE_ORDER[sort])
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
@@ -118,7 +134,13 @@ def verify(
     value: VerdictValue | None = None,
     explanation: str | None = None,
 ) -> Verdict:
-    """The political scientist confirms (or corrects) a verdict and it is published."""
+    """The political scientist confirms (or corrects) a verdict and it is published.
+
+    Only the political scientist may do it. An admin can't, otherwise the web would
+    show "overený politológom" for a verdict no political scientist has seen.
+    """
+    if actor.role != UserRole.OVEROVATEL:
+        raise Forbidden("Overiť verdikt môže len politológ (overovateľ)")
     current = db.get(Verdict, verdict_id)
     if current is None:
         raise NotFound("Verdikt sa nenašiel")
@@ -154,7 +176,7 @@ def verify(
         # The AI confidence and label stay only when the text is still the AI's.
         confidence=None if changed else current.confidence,
         ai_generated=current.ai_generated and not changed,
-        reviewer_role=PUBLIC_ROLE[actor.role],
+        reviewer_role=POLITICAL_SCIENTIST,
         review_reason=reason,
         published_at=datetime.now(UTC),
     )

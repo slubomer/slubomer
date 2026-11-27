@@ -184,13 +184,13 @@ AI verdikty sú verejné hneď po importe. Politológ (overovateľ) ich potom m�
 
 | Endpoint | Čo robí |
 | --- | --- |
-| `GET /api/v1/admin/verdicts` | Aktuálny verdikt každého sľubu (publikovaný alebo návrh), najstarší prvý. Filtre `verified` (`false` = fronta na overenie), `value`, `state`, `subject`. Smie celá redakcia |
-| `POST /api/v1/admin/verdicts/{id}/verify` | Overí verdikt. Telo `{"reason": "...", "value"?, "explanation"?}`. Dôvod je povinný, hodnotu a zdôvodnenie môže politológ zároveň opraviť. Smie overovateľ a admin |
+| `GET /api/v1/admin/verdicts` | Aktuálny verdikt každého sľubu (publikovaný alebo návrh). Filtre `verified` (`false` = fronta na overenie), `value`, `state`, `subject`, `max_confidence` (len verdikty s istotou AI najviac takouto). Triedenie `sort=oldest` (predvolené) alebo `sort=confidence` (najmenej isté prvé). Smie celá redakcia |
+| `POST /api/v1/admin/verdicts/{id}/verify` | Overí verdikt. Telo `{"reason": "...", "value"?, "explanation"?}`. Dôvod je povinný, hodnotu a zdôvodnenie môže politológ zároveň opraviť. Smie **len overovateľ**, admin dostane 403 |
 
 Pravidlá:
 
 - Overenie vytvorí **novú publikovanú verziu** s `reviewer_role` (napr. „politológ“, bez mena) a dôvodom v `review_reason`. Predošlá verzia (aj otvorený návrh) sa označí ako `nahradeny`, nič sa neprepisuje. Overiť sa dá aj návrh (`navrh`), tým sa zverejní.
-- `verified` je `true`, keď má verzia `reviewer_role`. Ak politológ zmení text alebo hodnotu, verzia už nie je `ai_generated` a nemá AI `confidence`.
+- `verified` je `true`, len keď verziu overil politológ (`reviewer_role` je „politológ“). Admin overiť nemôže, inak by web ukázal „overený politológom“ bez politológa. Ak politológ zmení text alebo hodnotu, verzia už nie je `ai_generated` a nemá AI `confidence`.
 - Overiť sa dá len verdikt s dôkazom z **publikovaného dokumentu** (zákon, uznesenie, zmluva, hlasovanie NR SR). Článok z médií (`web`) nestačí, vtedy API vráti 422. Výnimkou je `nesplnene`, ktorý dôkaz nepotrebuje. `nedostatok_informacii` sa overiť ani publikovať nedá.
 - Už overený verdikt bez zmeny znova overiť nejde (409), rovnako nahradenú verziu.
 - Každé overenie je v audite (`action: "verify"`, `entity: "verdict"`) aj s dôvodom.

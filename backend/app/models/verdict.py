@@ -3,10 +3,12 @@
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, event, func, inspect
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.db import Base
-from app.models.enums import VerdictState, VerdictValue, db_enum
+from app.models.enums import POLITICAL_SCIENTIST, VerdictState, VerdictValue, db_enum
 from app.services.errors import Conflict
 
 
@@ -32,13 +34,19 @@ class Verdict(Base):
 
     promise: Mapped["Promise"] = relationship(back_populates="verdicts")  # noqa: F821
 
-    @property
+    @hybrid_property
     def verified(self) -> bool:
-        """Checked by a person ("overený politológom"), not only by AI.
+        """Checked by a political scientist ("overený politológom"), not only by AI.
 
         A comment on the promise is not a verification, see verdict_service.verify().
         """
-        return self.reviewer_role is not None
+        return self.reviewer_role == POLITICAL_SCIENTIST
+
+    @verified.inplace.expression
+    @classmethod
+    def _verified_expression(cls) -> ColumnElement[bool]:
+        # coalesce, so "not verified" also matches rows without a reviewer (NULL).
+        return func.coalesce(cls.reviewer_role, "") == POLITICAL_SCIENTIST
 
 
 class VerdictLocked(Conflict):
